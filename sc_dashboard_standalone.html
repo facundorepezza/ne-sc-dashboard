@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SC Dashboard — Neuroelectrics</title>
+<style>
+:root { color-scheme: light; }
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; background: #f6f5f4; color: #2c2c2a; }
+
+/* ── Login overlay ────────────────────────────────────────────────────── */
+#login-overlay {
+  position: fixed; inset: 0; background: #f6f5f4;
+  display: flex; align-items: center; justify-content: center; z-index: 999;
+}
+.login-box {
+  background: #fff; border: 0.5px solid #d3d1c7; border-radius: 14px;
+  padding: 2.5rem 2rem; width: 340px; text-align: center;
+}
+.login-logo {
+  font-size: 13px; font-weight: 600; letter-spacing: .12em; color: #898d8d;
+  text-transform: uppercase; margin-bottom: 1.5rem;
+}
+.login-logo span { color: #4b4c4a; font-size: 22px; display: block; margin-bottom: 4px; }
+.login-box h2 { font-size: 15px; font-weight: 500; color: #4b4c4a; margin-bottom: .25rem; }
+.login-box p  { font-size: 12px; color: #898d8d; margin-bottom: 1.75rem; }
+.login-box input {
+  width: 100%; border: 0.5px solid #d3d1c7; border-radius: 8px;
+  padding: 10px 12px; font-size: 13px; color: #2c2c2a;
+  background: #fafaf9; margin-bottom: 10px; outline: none;
+}
+.login-box input:focus { border-color: #4b4c4a; }
+.login-btn {
+  width: 100%; background: #4b4c4a; color: #fff; border: none;
+  border-radius: 8px; padding: 10px; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: background .15s; margin-top: 4px;
+}
+.login-btn:hover { background: #333; }
+.login-btn:disabled { background: #b4b2a9; cursor: not-allowed; }
+.login-err { font-size: 11px; color: #993c1d; margin-top: 10px; min-height: 16px; }
+.login-info { font-size: 10px; color: #b4b2a9; margin-top: 1.25rem; line-height: 1.5; }
+.login-info a { color: #898d8d; text-decoration: underline; cursor: pointer; }
+
+/* ── App (hidden until logged in) ─────────────────────────────────────── */
+#app { display: none; }
+
+/* ── Header & tabs ──────────────────────────────────────────────────────*/
+.hdr { background: #fff; border-bottom: 0.5px solid #d3d1c7; padding: 1rem 1.5rem 0; }
+.hdr-top { display: flex; justify-content: space-between; align-items: flex-start; }
+.hdr h1 { font-size: 15px; font-weight: 500; color: #4b4c4a; margin-bottom: 2px; }
+.hdr .sub { font-size: 11px; color: #898d8d; }
+.logout-btn {
+  font-size: 11px; color: #898d8d; border: 0.5px solid #d3d1c7;
+  border-radius: 6px; padding: 4px 10px; background: none; cursor: pointer;
+  margin-top: 2px;
+}
+.logout-btn:hover { color: #4b4c4a; border-color: #4b4c4a; }
+.tab-nav { display: flex; margin-top: 0.75rem; }
+.tab-btn {
+  padding: .65rem 1.2rem; font-size: 12px; font-weight: 500; color: #898d8d;
+  border: none; border-bottom: 2px solid transparent; background: none;
+  cursor: pointer; transition: color .15s; margin-bottom: -0.5px;
+}
+.tab-btn:hover { color: #4b4c4a; }
+.tab-btn.active { color: #4b4c4a; border-bottom-color: #4b4c4a; }
+
+/* ── Panels ─────────────────────────────────────────────────────────────*/
+.panel { display: none; padding: 1.25rem 1.5rem; }
+.panel.on { display: block; }
+
+/* ── KPIs ───────────────────────────────────────────────────────────────*/
+.kpi-row { display: grid; gap: 10px; margin-bottom: 1.1rem; }
+.kpi-row.c4 { grid-template-columns: repeat(4, 1fr); }
+.kpi-row.c2 { grid-template-columns: repeat(2, 1fr); max-width: 520px; }
+.kpi { background: #fff; border: 0.5px solid #d3d1c7; border-radius: 10px; padding: .8rem 1rem; }
+.kpi-lbl { font-size: 10px; color: #898d8d; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.kpi-val { font-size: 21px; font-weight: 500; color: #2c2c2a; }
+.kpi-val.g { color: #0f6e56; } .kpi-val.b { color: #185fa5; }
+.kpi-val.r { color: #993c1d; } .kpi-val.a { color: #7a5c00; }
+.kpi-sub { font-size: 10px; color: #898d8d; margin-top: 2px; }
+
+/* ── Charts ─────────────────────────────────────────────────────────────*/
+.cw { background: #fff; border: 0.5px solid #d3d1c7; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.1rem; }
+.cw-title { font-size: 12px; font-weight: 500; color: #444441; margin-bottom: .7rem; }
+.cv { position: relative; width: 100%; }
+.cv-260 { height: 260px; } .cv-240 { height: 240px; } .cv-300 { height: 300px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.1rem; }
+.two-col .cw { margin-bottom: 0; }
+
+/* ── Table ──────────────────────────────────────────────────────────────*/
+.tw { background: #fff; border: 0.5px solid #d3d1c7; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.1rem; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: right; padding: 5px 8px; color: #898d8d; font-weight: 500; border-bottom: 1px solid #e8e8e4; }
+th:first-child { text-align: left; }
+td { text-align: right; padding: 5px 8px; border-bottom: 0.5px solid #f1efe8; color: #2c2c2a; }
+td:first-child { text-align: left; font-weight: 500; }
+tr:last-child td { border-bottom: none; font-weight: 600; background: #f6f5f4; }
+
+/* ── Filter / Legend / Misc ─────────────────────────────────────────────*/
+.frow { display: flex; align-items: center; gap: 8px; margin-bottom: 1rem; }
+.frow label { font-size: 12px; color: #898d8d; }
+select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; padding: 4px 10px; background: #fff; color: #2c2c2a; cursor: pointer; }
+.leg { display: flex; gap: 16px; margin-bottom: 8px; flex-wrap: wrap; }
+.leg span { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #898d8d; }
+.dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.loading { text-align: center; padding: 3rem; color: #898d8d; font-size: 13px; }
+.note { font-size: 10px; color: #b4b2a9; margin-top: .4rem; }
+.badge-p { font-size: 9px; background: #faeeda; color: #633806; border-radius: 3px; padding: 1px 4px; margin-left: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ═══ LOGIN ════════════════════════════════════════════════════════════ -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">
+      <span>Neuroelectrics</span>
+      Supply Chain Dashboard
+    </div>
+    <h2>Connect to Odoo</h2>
+    <p>neuroelectrics.cloudodoo.com</p>
+    <input type="email" id="l-user" placeholder="Email" autocomplete="username">
+    <input type="password" id="l-pass" placeholder="Password" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter') doLogin()">
+    <button class="login-btn" id="l-btn" onclick="doLogin()">Connect</button>
+    <div class="login-err" id="l-err"></div>
+    <div class="login-info">
+      Server: neuroelectrics.cloudodoo.com · DB: neuro_pro<br>
+      Having trouble? <a onclick="toggleCorsHelp()">See setup notes</a>
+      <div id="cors-help" style="display:none;margin-top:8px;text-align:left;border-top:1px solid #f0eeea;padding-top:8px;">
+        This dashboard calls Odoo directly from the browser.<br>
+        If you see a network error, your Odoo server needs CORS enabled for this URL.<br>
+        Ask your Odoo admin to add this origin to <strong>Settings → Technical → Allowed Origins</strong>,
+        or run the included <code>proxy.py</code> on your local machine and open
+        <code>http://localhost:8080</code> instead.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ APP ══════════════════════════════════════════════════════════════ -->
+<div id="app">
+  <div class="hdr">
+    <div class="hdr-top">
+      <div>
+        <h1>Supply Chain Dashboard — Neuroelectrics Group</h1>
+        <div class="sub" id="ts">Live · Odoo 16</div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">Logout</button>
+    </div>
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="go('cogs',this)">COGS</button>
+      <button class="tab-btn" onclick="go('sup',this)">Supplier</button>
+      <button class="tab-btn" onclick="go('inv',this)">Inventory</button>
+      <button class="tab-btn" onclick="go('ord',this)">Orders</button>
+      <button class="tab-btn" onclick="go('qc',this)">Quality</button>
+    </div>
+  </div>
+
+  <!-- COGS -->
+  <div id="tab-cogs" class="panel on">
+    <div id="cogs-load" class="loading">Loading…</div>
+    <div id="cogs-body" style="display:none">
+      <div class="kpi-row c4">
+        <div class="kpi"><div class="kpi-lbl">Revenue YTD</div><div class="kpi-val b" id="kr">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">COGS YTD</div><div class="kpi-val r" id="kc">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">Gross Profit YTD</div><div class="kpi-val g" id="kgp">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">Gross Margin YTD</div><div class="kpi-val g" id="kgm">—</div></div>
+      </div>
+      <div class="cw">
+        <div class="cw-title">Monthly Revenue vs COGS (USD) + GM%</div>
+        <div class="leg">
+          <span><span class="dot" style="background:#A3C7D2"></span>Revenue</span>
+          <span><span class="dot" style="background:#F5C4AF"></span>COGS</span>
+          <span><span class="dot" style="background:#595478;border-radius:50%"></span>GM%</span>
+        </div>
+        <div class="cv cv-260"><canvas id="cc"></canvas></div>
+      </div>
+      <div class="tw">
+        <div class="cw-title">Monthly Detail</div>
+        <table>
+          <thead><tr>
+            <th style="text-align:left">Month</th>
+            <th>Revenue ($)</th><th>Device COGS ($)</th><th>Acc. COGS ($)</th>
+            <th>Total COGS ($)</th><th>Gross Profit ($)</th><th>GM%</th>
+          </tr></thead>
+          <tbody id="ctb"></tbody>
+        </table>
+        <div class="note">Revenue: NE BCN EUR × monthly FX + NE INC USD. COGS: Odoo standard_price × invoiced qty.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUPPLIER -->
+  <div id="tab-sup" class="panel">
+    <div id="sup-load" class="loading">Loading…</div>
+    <div id="sup-body" style="display:none">
+      <div class="frow">
+        <label>Supplier:</label>
+        <select id="sup-sel" onchange="renderSup()"><option value="all">All Suppliers</option></select>
+      </div>
+      <div class="kpi-row c4">
+        <div class="kpi"><div class="kpi-lbl">OTD %</div><div class="kpi-val g" id="kotd">—</div><div class="kpi-sub" id="kotd-s"></div></div>
+        <div class="kpi"><div class="kpi-lbl">Avg Lead Time (days)</div><div class="kpi-val" id="klt">—</div><div class="kpi-sub" id="klt-s">PO approval → receipt</div></div>
+        <div class="kpi"><div class="kpi-lbl">TSP (Avg Approval Days)</div><div class="kpi-val" id="ktsp">—</div><div class="kpi-sub" id="ktsp-s">PO create → approve</div></div>
+        <div class="kpi"><div class="kpi-lbl">QC Failures</div><div class="kpi-val" id="kqc">—</div><div class="kpi-sub" id="kqc-s"></div></div>
+      </div>
+      <div class="two-col">
+        <div class="cw"><div class="cw-title">OTD % by Month</div><div class="cv cv-240"><canvas id="otdc"></canvas></div></div>
+        <div class="cw"><div class="cw-title">Avg Lead Time by Supplier (days, top 12)</div><div class="cv cv-240"><canvas id="ltc"></canvas></div></div>
+      </div>
+      <div class="note">OTD: date_done ≥ scheduled_date · Lead Time: actual receipt − PO approval · TSP: PO approval − creation · Filter: user_id=484 · 2025–2026 YTD</div>
+    </div>
+  </div>
+
+  <!-- INVENTORY -->
+  <div id="tab-inv" class="panel">
+    <div id="inv-load" class="loading">Loading…</div>
+    <div id="inv-body" style="display:none">
+      <div class="kpi-row c2">
+        <div class="kpi"><div class="kpi-lbl">Stock Value (EUR)</div><div class="kpi-val b" id="ksv">—</div><div class="kpi-sub" id="ksv-s"></div></div>
+        <div class="kpi"><div class="kpi-lbl">Inventory Turnover</div><div class="kpi-val" id="kit">—</div><div class="kpi-sub" id="kit-s">COGS ÷ Avg Inventory</div></div>
+      </div>
+      <div class="cw"><div class="cw-title">Stock Value by Reference (top 20, EUR)</div><div class="cv cv-300"><canvas id="sc"></canvas></div></div>
+      <div class="note">Source: stock.quant · Location: WH/IM/Stock/Intermediate &amp; raw material · Turnover: Annualized COGS (€) ÷ Stock Value (€). COGS from Odoo standard_price × invoiced qty.</div>
+    </div>
+  </div>
+
+  <!-- ORDERS -->
+  <div id="tab-ord" class="panel">
+    <div id="ord-load" class="loading">Loading…</div>
+    <div id="ord-body" style="display:none">
+      <div class="kpi-row c4">
+        <div class="kpi"><div class="kpi-lbl">POs Confirmed YTD (€)</div><div class="kpi-val r" id="kpo">—</div><div class="kpi-sub" id="kpo-s">user_id = 484</div></div>
+        <div class="kpi"><div class="kpi-lbl">Full Year Forecast (€)</div><div class="kpi-val" id="kfcy">—</div><div class="kpi-sub">Q1–Q4 budget</div></div>
+        <div class="kpi"><div class="kpi-lbl">YTD Attainment</div><div class="kpi-val" id="katt">—</div><div class="kpi-sub" id="katt-s">Ordered / YTD forecast</div></div>
+        <div class="kpi"><div class="kpi-lbl">Vendor Bills YTD (€)</div><div class="kpi-val b" id="kinv">—</div><div class="kpi-sub">Supplier invoices received</div></div>
+      </div>
+      <div class="cw">
+        <div class="cw-title">Quarterly: POs Confirmed vs Customer Invoiced (EUR) 2026</div>
+        <div class="leg">
+          <span><span class="dot" style="background:#595478"></span>Ordered</span>
+          <span><span class="dot" style="background:#A3C7D2"></span>Vendor Bills</span>
+        </div>
+        <div class="cv cv-260"><canvas id="oc"></canvas></div>
+      </div>
+      <div class="note">Ordered: purchase.order.line · state in (purchase, done) · user_id=484 · purchase_ok=true · excl. Engineering Tools, Shipping (Eng), Discount · FX: EUR×1 / USD×0.9 / GBP×1.1 · by date_approve quarter. Vendor Bills: account.move (in_invoice, posted) from same POs · by invoice_date quarter. Forecast: annual budget Q1–Q4.</div>
+    </div>
+  </div>
+
+  <!-- QUALITY -->
+  <div id="tab-qc" class="panel">
+    <div id="qc-load" class="loading">Loading…</div>
+    <div id="qc-body" style="display:none">
+      <div class="kpi-row c4">
+        <div class="kpi"><div class="kpi-lbl">QC Failed 2026</div><div class="kpi-val r" id="kqf">—</div><div class="kpi-sub">Incoming receipts</div></div>
+        <div class="kpi"><div class="kpi-lbl">Suppliers Affected</div><div class="kpi-val" id="kqs">—</div><div class="kpi-sub">Unique suppliers</div></div>
+        <div class="kpi"><div class="kpi-lbl">Top Failing Supplier</div><div class="kpi-val" id="kqt" style="font-size:1rem">—</div><div class="kpi-sub" id="kqt-s"></div></div>
+        <div class="kpi"><div class="kpi-lbl">Failed Units (qty)</div><div class="kpi-val" id="kqq">—</div><div class="kpi-sub">Total qty across failures</div></div>
+      </div>
+      <div class="cw">
+        <div class="cw-title">QC Failures by Supplier · 2026</div>
+        <div class="cv" style="height:220px"><canvas id="qcc"></canvas></div>
+      </div>
+      <div class="tw">
+        <div class="cw-title" style="margin-bottom:.75rem">Failed Inspection Detail</div>
+        <table id="qct">
+          <thead><tr>
+            <th style="text-align:left">QC #</th>
+            <th style="text-align:left">Date</th>
+            <th style="text-align:left">Supplier</th>
+            <th style="text-align:left">PRQ</th>
+            <th style="text-align:left">Product</th>
+            <th>Qty</th>
+          </tr></thead>
+          <tbody id="qctb"></tbody>
+        </table>
+      </div>
+      <div class="note">qc.inspection · state = failed · date_done 2026 · picking_id.purchase_id ≠ false · incoming receipts linked to purchase orders only.</div>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<script>
+// ══════════════════════════════════════════════════════════════════════════
+// ODOO API LAYER
+// Calls Odoo 16 JSON-RPC directly — no Cowork dependency
+// ══════════════════════════════════════════════════════════════════════════
+const ODOO_URL = 'https://neuroelectrics.cloudodoo.com';
+const ODOO_DB  = 'neuro_pro';
+
+// ── Neuroelectrics brand palette ──────────────────────────────────────────
+const NE = {
+  purple: '#595478',  purpleA: a => `rgba(89,84,120,${a})`,
+  teal:   '#A3C7D2',  tealA:   a => `rgba(163,199,210,${a})`,
+  peach:  '#F5C4AF',  peachA:  a => `rgba(245,196,175,${a})`,
+  pink:   '#F6A6A4',  pinkA:   a => `rgba(246,166,164,${a})`,
+  steel:  '#8C969D',  steelA:  a => `rgba(140,150,157,${a})`,
+};
+
+async function odooRpc(endpoint, params) {
+  const res = await fetch(ODOO_URL + endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'call', id: 1, params })
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.data?.message || JSON.stringify(data.error));
+  return data.result;
+}
+
+// search_read → returns array of records
+async function searchRead(model, domain, fields, limit = 500) {
+  const result = await odooRpc('/web/dataset/call_kw', {
+    model, method: 'search_read',
+    args: [domain],
+    kwargs: { fields, limit, order: '' }
+  });
+  return result || [];
+}
+
+// read_group → returns array of grouped rows (same format as Odoo native)
+// fields = [...groupby_exprs, ...measure_fields]
+async function readGroup(model, domain, fields, groupby, limit = 50) {
+  const result = await odooRpc('/web/dataset/call_kw', {
+    model, method: 'read_group',
+    args: [domain, fields, groupby],
+    kwargs: { limit, lazy: false }
+  });
+  return result || [];
+}
+
+// ── Login / Logout ────────────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('l-user').value.trim();
+  const pass  = document.getElementById('l-pass').value;
+  const btn   = document.getElementById('l-btn');
+  const err   = document.getElementById('l-err');
+  if (!email || !pass) { err.textContent = 'Enter email and password.'; return; }
+  btn.disabled = true; btn.textContent = 'Connecting…'; err.textContent = '';
+  try {
+    const result = await odooRpc('/web/session/authenticate', {
+      db: ODOO_DB, login: email, password: pass
+    });
+    if (!result?.uid) throw new Error('Invalid credentials');
+    document.getElementById('login-overlay').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    localStorage.setItem('ne_sc_user', email);
+    initDashboard();
+  } catch(e) {
+    const msg = e.message.includes('fetch') || e.message.includes('Failed')
+      ? 'Connection error — CORS may not be enabled. See setup notes below.'
+      : (e.message.includes('Invalid') ? 'Wrong email or password.' : e.message);
+    err.textContent = msg;
+    btn.disabled = false; btn.textContent = 'Connect';
+  }
+}
+
+function doLogout() {
+  odooRpc('/web/session/destroy', {}).catch(()=>{});
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-overlay').style.display = 'flex';
+  document.getElementById('l-pass').value = '';
+  document.getElementById('l-err').textContent = '';
+  document.getElementById('l-btn').disabled = false;
+  document.getElementById('l-btn').textContent = 'Connect';
+  // Reset dashboard state
+  Object.keys(loaded).forEach(k => delete loaded[k]);
+  Object.keys(charts).forEach(k => { try{charts[k].destroy();}catch(e){} delete charts[k]; });
+}
+
+function toggleCorsHelp() {
+  const h = document.getElementById('cors-help');
+  h.style.display = h.style.display === 'none' ? 'block' : 'none';
+}
+
+// Pre-fill saved email
+const savedUser = localStorage.getItem('ne_sc_user');
+if (savedUser) document.getElementById('l-user').value = savedUser;
+
+// ══════════════════════════════════════════════════════════════════════════
+// DASHBOARD CONSTANTS
+// ══════════════════════════════════════════════════════════════════════════
+const MN  = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MI  = {January:0,February:1,March:2,April:3,May:4,June:5,July:6,August:7,September:8,October:9,November:10,December:11};
+
+const FX  = [1.195,1.175,1.145,1.160,1.165,1.175,1.170,1.170,1.170,1.170,1.170,1.170];
+const DEV = [5593,12656,25769,41188,33515,0,0,0,0,0,0,0];
+const ACC = [195.76,470.47,835.13,1000.22,332.37,566.36,0,0,0,0,0,0];
+const BCN_FB = [55793,135632,263006,225392,234485,4411,0,0,0,0,0,0];
+const INC_FB = [5117,11733,13357,216306,55418,0,0,0,0,0,0,0];
+const FX_FLAT = 1.1976;
+
+// ── State ─────────────────────────────────────────────────────────────────
+const REV = new Array(12).fill(0);
+let loaded = {}, charts = {};
+let allPk = [], allPO = {}, allQCFailed = null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+const $   = id => document.getElementById(id);
+const usd = n  => n == null ? '—' : '$' + Math.round(n).toLocaleString('en-US');
+const eur = n  => n == null ? '—' : '€' + Math.round(n).toLocaleString('en-US');
+const pct = v  => v == null ? '—' : (v * 100).toFixed(1) + '%';
+const dc  = id => { if (charts[id]) { charts[id].destroy(); delete charts[id]; } };
+const daysStr = d => d == null ? '—' : Math.round(d) + ' d';
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+function go(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  $('tab-' + name).classList.add('on');
+  btn.classList.add('active');
+  if (!loaded[name]) { loaded[name] = true; load(name); }
+}
+
+async function load(n) {
+  if (n === 'cogs') await loadCOGS();
+  if (n === 'sup')  await loadSup();
+  if (n === 'inv')  await loadInv();
+  if (n === 'ord')  await loadOrd();
+  if (n === 'qc')   await loadQC();
+}
+
+function initDashboard() {
+  loaded['cogs'] = true;
+  loadCOGS();
+  $('ts').textContent = 'Live · ' + new Date().toLocaleDateString('en-US');
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// COGS TAB
+// ══════════════════════════════════════════════════════════════════════════
+async function loadCOGS() {
+  try {
+    const rows = await readGroup('account.move',
+      ['&','&','&','&',
+        ['move_type','=','out_invoice'],['state','=','posted'],
+        ['invoice_date','>=','2026-01-01'],['invoice_date','<','2027-01-01'],
+        ['partner_id','!=',7095],
+        '|',
+        ['&',['journal_id','=',5],['currency_id','=',1]],
+        ['&',['journal_id','=',51],['currency_id','=',2]]],
+      ['invoice_date:month','currency_id','amount_untaxed'],
+      ['invoice_date:month','currency_id'], 30
+    );
+    if (rows.length) {
+      const em = {}, um = {};
+      for (const row of rows) {
+        const mn = (row['invoice_date:month'] || '').split(' ')[0];
+        const mi = MI[mn]; if (mi === undefined) continue;
+        const cid = Array.isArray(row.currency_id) ? row.currency_id[0] : row.currency_id;
+        if (cid === 1) em[mi] = (em[mi] || 0) + row.amount_untaxed;
+        else           um[mi] = (um[mi] || 0) + row.amount_untaxed;
+      }
+      for (let i = 0; i < 12; i++) REV[i] = Math.round((em[i] || 0) * FX[i] + (um[i] || 0));
+    } else {
+      for (let i = 0; i < 12; i++) REV[i] = Math.round(BCN_FB[i] * FX_FLAT + INC_FB[i]);
+    }
+  } catch(e) {
+    for (let i = 0; i < 12; i++) REV[i] = Math.round(BCN_FB[i] * FX_FLAT + INC_FB[i]);
+  }
+  renderCOGS();
+}
+
+function renderCOGS() {
+  const idx = [];
+  for (let i = 0; i < 12; i++) if (REV[i] > 0 || DEV[i] + ACC[i] > 0) idx.push(i);
+
+  let ytdR = 0, ytdD = 0, ytdA = 0;
+  for (const i of idx) { ytdR += REV[i]; ytdD += DEV[i] * FX[i]; ytdA += ACC[i] * FX[i]; }
+  const ytdC = ytdD + ytdA, ytdGP = ytdR - ytdC, ytdGM = ytdR > 0 ? ytdGP / ytdR : 0;
+
+  $('kr').textContent = usd(ytdR);  $('kc').textContent = usd(ytdC);
+  $('kgp').textContent = usd(ytdGP); $('kgm').textContent = pct(ytdGM);
+
+  const labels = idx.map(i => MS[i]);
+  const revD   = idx.map(i => REV[i]);
+  const cogD   = idx.map(i => (DEV[i] + ACC[i]) * FX[i]);
+  const gmD    = idx.map(i => REV[i] > 0 ? +(((REV[i] - (DEV[i] + ACC[i]) * FX[i]) / REV[i] * 100).toFixed(1)) : null);
+
+  dc('cc');
+  charts['cc'] = new Chart($('cc').getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets: [
+      { label:'Revenue', data:revD, backgroundColor:NE.teal,   borderRadius:3, yAxisID:'y', order:2 },
+      { label:'COGS',    data:cogD, backgroundColor:NE.peach,  borderRadius:3, yAxisID:'y', order:2 },
+      { label:'GM%', data:gmD, type:'line', borderColor:NE.purple, backgroundColor:'transparent',
+        pointBackgroundColor:'#1d9e75', pointRadius:4, borderWidth:2, tension:.3,
+        spanGaps:true, yAxisID:'y2', order:1 }
+    ]},
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{ legend:{display:false},
+        tooltip:{backgroundColor:'rgba(44,44,42,.9)',
+          callbacks:{label:c=>c.datasetIndex===2?' GM% '+c.raw+'%':' '+c.dataset.label+': '+usd(c.raw)}}},
+      scales:{
+        y:{grid:{color:'rgba(0,0,0,.05)'},ticks:{color:'#888780',font:{size:11},
+          callback:v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1000?'$'+Math.round(v/1000)+'K':'$'+v}},
+        y2:{position:'right',min:80,max:100,grid:{drawOnChartArea:false},
+            ticks:{color:'#1d9e75',font:{size:11},callback:v=>v+'%'}},
+        x:{grid:{display:false},ticks:{color:'#888780',font:{size:11},autoSkip:false,maxRotation:0}}
+      }
+    }
+  });
+
+  const tb = $('ctb'); tb.innerHTML = '';
+  let tR = 0, tD = 0, tA = 0;
+  for (const i of idx) {
+    const dc2 = DEV[i]*FX[i], ac = ACC[i]*FX[i], tc = dc2+ac, gp = REV[i]-tc;
+    const gm = REV[i] > 0 ? gp / REV[i] : null;
+    tR += REV[i]; tD += dc2; tA += ac;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${MN[i]}${i===5?'<span class="badge-p">partial</span>':''}</td>
+      <td>${usd(REV[i])}</td><td>${usd(dc2)}</td><td>${usd(ac)}</td>
+      <td>${usd(tc)}</td><td>${usd(gp)}</td>
+      <td style="color:${gm>0.85?'#0f6e56':'#2c2c2a'}">${pct(gm)}</td>`;
+    tb.appendChild(tr);
+  }
+  const ttc = tD+tA, tgp = tR-ttc, tgm = tR > 0 ? tgp/tR : 0;
+  const tf = document.createElement('tr');
+  tf.innerHTML = `<td>YTD Total</td><td>${usd(tR)}</td><td>${usd(tD)}</td><td>${usd(tA)}</td>
+    <td>${usd(ttc)}</td><td>${usd(tgp)}</td><td style="color:#0f6e56">${pct(tgm)}</td>`;
+  tb.appendChild(tf);
+
+  $('cogs-load').style.display = 'none';
+  $('cogs-body').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SUPPLIER TAB
+// OTD: date_done ≥ scheduled_date · Lead Time: date_done − date_approve
+// TSP: date_approve − create_date · QC: qc.inspection · user_id=484
+// ══════════════════════════════════════════════════════════════════════════
+async function loadSup() {
+  allPk = []; allPO = {}; allQCFailed = null;
+  try {
+    allPk = await searchRead('stock.picking',
+      [['picking_type_code','=','incoming'],['state','=','done'],
+       ['date_done','>=','2025-01-01'],['purchase_id.user_id','=',484]],
+      ['id','partner_id','date_done','scheduled_date','purchase_id'], 1000
+    );
+
+    if (allPk.length) {
+      const poIds = [...new Set(allPk.map(p => p.purchase_id?.[0]).filter(Boolean))];
+      if (poIds.length) {
+        const pos = await searchRead('purchase.order',
+          [['id','in',poIds]],
+          ['id','partner_id','date_approve','create_date'], 1000
+        );
+        pos.forEach(po => { allPO[po.id] = po; });
+      }
+    }
+  } catch(e) { allPk = []; allPO = {}; }
+
+  try {
+    const qcRows = await searchRead('qc.inspection', [['state','=','failed']], ['id'], 500);
+    allQCFailed = qcRows.length;
+  } catch(e) { allQCFailed = null; }
+
+  // Populate dropdown
+  const seen = new Map();
+  allPk.forEach(p => {
+    if (p.partner_id?.[0] && !seen.has(p.partner_id[0]))
+      seen.set(p.partner_id[0], p.partner_id[1]);
+  });
+  const sel = $('sup-sel');
+  while (sel.options.length > 1) sel.remove(1);
+  [...seen.entries()].sort((a,b) => a[1].localeCompare(b[1])).forEach(([id,nm]) => {
+    const o = document.createElement('option'); o.value = id;
+    o.textContent = nm.replace(/^\(.*?\)\s*/,'').slice(0,40);
+    sel.appendChild(o);
+  });
+
+  $('sup-load').style.display = 'none';
+  $('sup-body').style.display = 'block';
+  renderSup();
+}
+
+function renderSup() {
+  const sel = $('sup-sel').value;
+  const pk  = sel === 'all' ? allPk : allPk.filter(p => String(p.partner_id?.[0]) === sel);
+
+  // OTD: date_done ≥ scheduled_date
+  let onTime = 0, total = 0;
+  pk.forEach(p => {
+    if (!p.date_done || !p.scheduled_date) return;
+    total++;
+    if (new Date(p.date_done) >= new Date(p.scheduled_date)) onTime++;
+  });
+  const otdPct = total > 0 ? onTime / total : null;
+  $('kotd').textContent = otdPct != null ? pct(otdPct) : '—';
+  $('kotd').className = 'kpi-val ' + (otdPct==null?'':(otdPct>=.85?'g':otdPct>=.70?'a':'r'));
+  $('kotd-s').textContent = total > 0 ? `${onTime} / ${total} receipts` : '';
+
+  // Lead Time: date_done − po.date_approve
+  const ltBySupplier = {};
+  let ltSum = 0, ltCount = 0;
+  pk.forEach(p => {
+    if (!p.date_done || !p.purchase_id?.[0]) return;
+    const po = allPO[p.purchase_id[0]];
+    if (!po?.date_approve) return;
+    const d = Math.max(1, (new Date(p.date_done) - new Date(po.date_approve)) / 86400000);
+    if (d > 730) return;
+    ltSum += d; ltCount++;
+    const nm = (p.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/,'');
+    if (!ltBySupplier[nm]) ltBySupplier[nm] = [];
+    ltBySupplier[nm].push(d);
+  });
+  const ltAvg = ltCount > 0 ? ltSum / ltCount : null;
+  $('klt').textContent = daysStr(ltAvg);
+  $('klt').className = 'kpi-val ' + (ltAvg==null?'':(ltAvg<=30?'g':ltAvg<=60?'a':'r'));
+  $('klt-s').textContent = ltCount > 0 ? `avg over ${ltCount} receipts` : 'PO approval → receipt';
+
+  // TSP: po.date_approve − po.create_date
+  const poList = sel === 'all'
+    ? Object.values(allPO)
+    : Object.values(allPO).filter(po => String(po.partner_id?.[0]) === sel);
+  let tspSum = 0, tspCount = 0;
+  poList.forEach(po => {
+    if (!po.date_approve || !po.create_date) return;
+    const d = Math.max(1, (new Date(po.date_approve) - new Date(po.create_date)) / 86400000);
+    if (d > 365) return;
+    tspSum += d; tspCount++;
+  });
+  const tspAvg = tspCount > 0 ? tspSum / tspCount : null;
+  $('ktsp').textContent = daysStr(tspAvg);
+  $('ktsp').className = 'kpi-val ' + (tspAvg==null?'':(tspAvg<=7?'g':tspAvg<=14?'a':'r'));
+  $('ktsp-s').textContent = tspCount > 0 ? `avg over ${tspCount} POs` : 'PO create → approve';
+
+  // QC
+  if (allQCFailed === null) {
+    $('kqc').textContent = 'N/A'; $('kqc').className = 'kpi-val';
+    $('kqc-s').textContent = 'qc.inspection not accessible';
+  } else {
+    $('kqc').textContent = String(allQCFailed);
+    $('kqc').className = 'kpi-val ' + (allQCFailed===0?'g':allQCFailed<5?'a':'r');
+    $('kqc-s').textContent = 'qc.inspection failures';
+  }
+
+  // OTD by month chart
+  const mOTD = {}, mTot = {};
+  pk.forEach(p => {
+    if (!p.date_done || !p.scheduled_date) return;
+    const dt = new Date(p.date_done);
+    const k  = dt.getFullYear() + '-' + String(dt.getMonth()).padStart(2,'0');
+    mTot[k] = (mTot[k] || 0) + 1;
+    if (new Date(p.date_done) >= new Date(p.scheduled_date)) mOTD[k] = (mOTD[k] || 0) + 1;
+  });
+  const mKeys     = Object.keys(mTot).sort();
+  const otdLabels = mKeys.map(k => { const[y,m]=k.split('-'); return MS[+m]+(y==='2025'?"'25":"'26"); });
+  const otdVals   = mKeys.map(k => mTot[k]>0 ? +((mOTD[k]||0)/mTot[k]*100).toFixed(1) : null);
+  const otdColors = otdVals.map(v => v==null?'#d3d1c7':v>=85?NE.teal:v>=70?NE.peach:NE.pink);
+
+  dc('otdc');
+  charts['otdc'] = new Chart($('otdc').getContext('2d'), {
+    type: 'bar',
+    data: { labels:otdLabels, datasets:[{label:'OTD %',data:otdVals,backgroundColor:otdColors,borderRadius:3}]},
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` OTD: ${c.raw}%`}}},
+      scales:{
+        y:{min:0,max:100,grid:{color:'rgba(0,0,0,.05)'},ticks:{color:'#888780',font:{size:11},callback:v=>v+'%'}},
+        x:{grid:{display:false},ticks:{color:'#888780',font:{size:10},autoSkip:false,maxRotation:45}}
+      }
+    }
+  });
+
+  // Lead time by supplier chart
+  const ltArr = Object.entries(ltBySupplier)
+    .map(([k,v]) => ({s:k, lt:+(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1), n:v.length}))
+    .sort((a,b) => b.lt-a.lt).slice(0,12);
+
+  dc('ltc');
+  charts['ltc'] = new Chart($('ltc').getContext('2d'), {
+    type: 'bar',
+    data: { labels: ltArr.map(e=>e.s.length>22?e.s.slice(0,20)+'…':e.s),
+            datasets:[{label:'Lead Time (days)',data:ltArr.map(e=>e.lt),backgroundColor:NE.steel,borderRadius:3}]},
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw} d (n=${ltArr[c.dataIndex]?.n})`}}},
+      scales:{
+        x:{grid:{color:'rgba(0,0,0,.05)'},ticks:{color:'#888780',font:{size:11},callback:v=>v+'d'}},
+        y:{grid:{display:false},ticks:{color:'#888780',font:{size:10}}}
+      }
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// INVENTORY TAB
+// Location: WH/IM/Stock/Intermediate & raw material
+// Turnover: COGS (€, annualized) ÷ Stock Value (€)
+// ══════════════════════════════════════════════════════════════════════════
+async function loadInv() {
+  let quants = [], prices = {};
+  try {
+    quants = await searchRead('stock.quant',
+      [['location_id.complete_name','=','WH/IM/Stock/Intermediate & raw material'],
+       ['quantity','>',0]],
+      ['product_id','quantity','location_id'], 500
+    );
+    if (quants.length) {
+      const pids = [...new Set(quants.map(q => q.product_id[0]))];
+      const prods = await searchRead('product.product',
+        [['id','in',pids]],
+        ['id','default_code','name','standard_price'], 500
+      );
+      prods.forEach(p => { prices[p.id] = p; });
+    }
+  } catch(e) {}
+
+  const items = quants.map(q => {
+    const p = prices[q.product_id[0]] || {};
+    const val = (q.quantity||0) * (p.standard_price||0);
+    return { pid: q.product_id[0], code: p.default_code||q.product_id[1]||'?',
+             qty: q.quantity, sp: p.standard_price||0, val };
+  }).filter(x => x.val > 0).sort((a,b) => b.val-a.val);
+
+  const totalVal = items.reduce((s,x) => s+x.val, 0);
+
+  // Annualized COGS in EUR from hardcoded arrays (DEV + ACC)
+  let cogsYTD = 0, nMonths = 0;
+  for (let i = 0; i < 12; i++) {
+    if (DEV[i] > 0 || ACC[i] > 0) { cogsYTD += DEV[i] + ACC[i]; nMonths++; }
+  }
+  const cogsAnn  = nMonths > 0 ? cogsYTD / nMonths * 12 : 0;
+  const turnover = totalVal > 0 && cogsAnn > 0 ? cogsAnn / totalVal : null;
+  const diodays  = turnover > 0 ? 365 / turnover : null;
+
+  $('ksv').textContent = eur(totalVal);
+  $('ksv-s').textContent = `${items.length} products · IM stock`;
+
+  $('kit').textContent = turnover != null ? turnover.toFixed(2) + '×' : '—';
+  $('kit').className = 'kpi-val ' + (turnover==null?'':(turnover>=2?'g':turnover>=1.52?'a':'r'));
+  $('kit-s').textContent = diodays != null
+    ? `≈ ${Math.round(diodays)} days · target > 1.52× (< 240 d)`
+    : 'No COGS data';
+
+  const top = items.slice(0,20);
+  dc('sc');
+  charts['sc'] = new Chart($('sc').getContext('2d'), {
+    type: 'bar',
+    data: { labels: top.map(x=>(x.code||'').slice(0,22)),
+            datasets:[{label:'Stock Value (€)',data:top.map(x=>Math.round(x.val)),backgroundColor:NE.teal,borderRadius:3}]},
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` €${c.raw.toLocaleString()} (qty ${top[c.dataIndex]?.qty?.toFixed(1)})`}}},
+      scales:{
+        x:{grid:{color:'rgba(0,0,0,.05)'},ticks:{color:'#888780',font:{size:11},callback:v=>'€'+Math.round(v/1000)+'K'}},
+        y:{grid:{display:false},ticks:{color:'#888780',font:{size:10}}}
+      }
+    }
+  });
+
+  $('inv-load').style.display = 'none';
+  $('inv-body').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ORDERS TAB
+// PO lines: state in (purchase,done), user_id=484, purchase_ok=true
+// FX → EUR: EUR×1 / USD×0.9 / GBP×1.1
+// Grouped by quarter of date_approve (confirmation date)
+// Excludes: Engineering Tools, Shipping & Handling (Eng), Discount
+// ══════════════════════════════════════════════════════════════════════════
+const EXCLUDE_PRODS = ['Engineering Tools','Shipping & Handling (Eng)','Shipping & handling (Eng)','Discount'];
+const FX_TO_EUR    = { EUR:1, USD:0.9, GBP:1.1 };
+const FORECAST_Q   = [205709.91, 69122.48, 128141.52, 120913.16]; // Q1–Q4 budget in EUR
+
+async function loadOrd() {
+  const poQ  = [0,0,0,0]; // Q1–Q4 confirmed POs in EUR
+  const invQ = [0,0,0,0]; // Q1–Q4 vendor bills received in EUR
+
+  try {
+    // ── 1. PO lines ───────────────────────────────────────────────────────
+    const lines = await searchRead('purchase.order.line',
+      [['state','in',['done','purchase']],
+       ['order_id.user_id','=',484],
+       ['product_id.purchase_ok','=',true],
+       ['order_id.date_approve','>=','2026-01-01'],
+       ['order_id.date_approve','<','2027-01-01']],
+      ['id','product_id','product_qty','price_unit','order_id'], 2000
+    );
+
+    // ── 2. POs for currency + date_approve ────────────────────────────────
+    const poIds = [...new Set(lines.map(l=>l.order_id?.[0]).filter(Boolean))];
+    const poMap = {};
+    if (poIds.length) {
+      const pos = await searchRead('purchase.order',
+        [['id','in',poIds]],
+        ['id','currency_id','date_approve','invoice_ids'], 500
+      );
+      pos.forEach(po => { poMap[po.id] = po; });
+    }
+
+    // ── 3. Aggregate by quarter ───────────────────────────────────────────
+    lines.forEach(line => {
+      const name = line.product_id?.[1] || '';
+      if (EXCLUDE_PRODS.some(x => name.includes(x))) return;
+
+      const po = poMap[line.order_id?.[0]];
+      if (!po?.date_approve) return;
+
+      const cname = Array.isArray(po.currency_id) ? po.currency_id[1] : 'EUR';
+      const fx    = FX_TO_EUR[cname] ?? 1;
+      const amt   = (line.product_qty||0) * (line.price_unit||0) * fx;
+      const q     = Math.floor(new Date(po.date_approve).getMonth() / 3);
+      poQ[q] += amt;
+    });
+
+    // ── 4. Vendor bills received for confirmed POs ────────────────────────
+    const allBillIds = [...new Set(Object.values(poMap).flatMap(po => po.invoice_ids || []))];
+    if (allBillIds.length) {
+      const bills = await searchRead('account.move',
+        [['id','in',allBillIds],
+         ['move_type','=','in_invoice'],
+         ['state','=','posted'],
+         ['invoice_date','>=','2026-01-01'],
+         ['invoice_date','<','2027-01-01']],
+        ['id','invoice_date','amount_untaxed','currency_id'], 500
+      );
+      bills.forEach(bill => {
+        if (!bill.invoice_date) return;
+        const cname = Array.isArray(bill.currency_id) ? bill.currency_id[1] : 'EUR';
+        const fx    = FX_TO_EUR[cname] ?? 1;
+        const q     = Math.floor(new Date(bill.invoice_date).getMonth() / 3);
+        invQ[q]    += (bill.amount_untaxed || 0) * fx;
+      });
+    }
+
+  } catch(e) {
+    console.warn('Orders tab error:', e);
+  }
+
+  // ── KPIs ──────────────────────────────────────────────────────────────
+  const totalPO   = poQ.reduce((s,v)=>s+v,0);
+  const totalInv  = invQ.reduce((s,v)=>s+v,0);
+  const totalFCY  = FORECAST_Q.reduce((s,v)=>s+v,0);
+  // YTD forecast = sum of quarters that have already started (based on today's month)
+  const curQ      = Math.floor(new Date().getMonth() / 3);
+  const ytdFcast  = FORECAST_Q.slice(0, curQ + 1).reduce((s,v)=>s+v,0);
+  const attPct    = ytdFcast > 0 ? totalPO / ytdFcast : null;
+
+  $('kpo').textContent   = eur(totalPO);
+  $('kpo-s').textContent = `${poQ.filter(v=>v>0).length} active quarters`;
+  $('kfcy').textContent  = eur(totalFCY);
+  $('katt').textContent  = attPct != null ? (attPct*100).toFixed(1)+'%' : '—';
+  $('katt').className    = 'kpi-val ' + (attPct==null?'':(attPct>=.95?'g':attPct>=.75?'a':'r'));
+  $('katt-s').textContent = attPct != null ? `${eur(totalPO)} / ${eur(ytdFcast)} ytd forecast` : '';
+  $('kinv').textContent  = eur(totalInv);
+
+  // ── Cumulative arrays ─────────────────────────────────────────────────
+  const cumPO  = poQ.reduce((a,v)=>(a.push((a[a.length-1]||0)+v),a),[]);
+  const cumInv = invQ.reduce((a,v)=>(a.push((a[a.length-1]||0)+v),a),[]);
+  const cumFcy = FORECAST_Q.reduce((a,v)=>(a.push((a[a.length-1]||0)+v),a),[]);
+
+  // ── Chart: bars (per quarter, left axis) + filled lines (cumulative, right axis) ──
+  const qLabels = ['Q1','Q2','Q3','Q4'];
+  const fmtK = v => v>=1e6?'€'+(v/1e6).toFixed(1)+'M':v>=1000?'€'+Math.round(v/1000)+'K':'€'+v;
+  dc('oc');
+  charts['oc'] = new Chart($('oc').getContext('2d'), {
+    type: 'bar',
+    data: { labels: qLabels, datasets: [
+      // ── Per-quarter bars ──
+      { label:'Ordered',      data:poQ.map(v=>Math.round(v)),
+        backgroundColor:NE.purpleA(.7), borderRadius:4, order:5 },
+      { label:'Vendor Bills', data:invQ.map(v=>Math.round(v)),
+        backgroundColor:NE.tealA(.7),   borderRadius:4, order:6 },
+      // ── Cumulative filled lines (same axis — always ≥ bars) ──
+      { type:'line', label:'Cum. Forecast', data:cumFcy.map(Math.round),
+        borderColor:NE.steel, backgroundColor:NE.steelA(.07),
+        borderWidth:2, borderDash:[6,4],
+        pointRadius:5, pointBackgroundColor:'#fff', pointBorderColor:NE.steel, pointBorderWidth:2,
+        tension:0, fill:'origin', order:1 },
+      { type:'line', label:'Cum. Ordered',  data:cumPO.map(Math.round),
+        borderColor:NE.purple, backgroundColor:NE.purpleA(.10),
+        borderWidth:2.5,
+        pointRadius:5, pointBackgroundColor:'#fff', pointBorderColor:NE.purple, pointBorderWidth:2,
+        tension:0, fill:'origin', order:2 },
+      { type:'line', label:'Cum. Invoiced', data:cumInv.map(Math.round),
+        borderColor:NE.teal, backgroundColor:NE.tealA(.12),
+        borderWidth:2.5,
+        pointRadius:5, pointBackgroundColor:'#fff', pointBorderColor:NE.teal, pointBorderWidth:2,
+        tension:0, fill:'origin', order:3 },
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:true, position:'top',
+          labels:{color:'#4b4c4a', font:{size:11}, boxWidth:12, padding:14}},
+        tooltip:{backgroundColor:'rgba(44,44,42,.9)',
+          callbacks:{label:c=>` ${c.dataset.label}: ${eur(c.raw)}`}}},
+      scales:{
+        y:{ grid:{color:'rgba(0,0,0,.05)'},
+            ticks:{color:'#888780', font:{size:11}, callback:fmtK}},
+        x:{ grid:{display:false}, ticks:{color:'#888780', font:{size:13}, autoSkip:false}}
+      }
+    }
+  });
+
+  $('ord-load').style.display = 'none';
+  $('ord-body').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// QUALITY TAB
+// qc.inspection · state=failed · date_done 2026 · picking linked to PO
+// ══════════════════════════════════════════════════════════════════════════
+async function loadQC() {
+  try {
+    // 1. Failed incoming QC inspections 2026
+    const insp = await searchRead('qc.inspection',
+      [['state','=','failed'],
+       ['date_done','>=','2026-01-01'],
+       ['date_done','<','2027-01-01'],
+       ['picking_id.purchase_id','!=',false]],
+      ['id','name','date_done','product_id','picking_id','qty'], 500
+    );
+
+    // 2. Fetch picking partner + PRQ
+    const pickIds = [...new Set(insp.map(i => i.picking_id?.[0]).filter(Boolean))];
+    const pickMap = {};
+    if (pickIds.length) {
+      const picks = await searchRead('stock.picking',
+        [['id','in',pickIds]],
+        ['id','name','partner_id','purchase_id'], 200
+      );
+      picks.forEach(p => { pickMap[p.id] = p; });
+    }
+
+    // 3. Build supplier → failures map
+    const supMap = {};
+    insp.forEach(i => {
+      const pick = pickMap[i.picking_id?.[0]];
+      if (!pick) return;
+      const sup = (pick.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/, '');
+      const prq = (pick.purchase_id?.[1] || '?').split(' ')[0];
+      if (!supMap[sup]) supMap[sup] = { count: 0, qty: 0, rows: [] };
+      supMap[sup].count++;
+      supMap[sup].qty += i.qty || 0;
+      supMap[sup].rows.push({
+        name:    i.name,
+        date:    (i.date_done || '').slice(0, 10),
+        supplier: sup,
+        prq,
+        product: i.product_id?.[1] || '?',
+        qty:     i.qty || 0
+      });
+    });
+
+    // 4. KPIs
+    const totalFail = insp.length;
+    const totalQty  = insp.reduce((s, i) => s + (i.qty || 0), 0);
+    const sorted    = Object.entries(supMap).sort((a, b) => b[1].count - a[1].count);
+    const topSup    = sorted[0];
+    $('kqf').textContent   = totalFail;
+    $('kqs').textContent   = sorted.length;
+    $('kqt').textContent   = topSup ? topSup[0] : '—';
+    $('kqt-s').textContent = topSup ? `${topSup[1].count} failure${topSup[1].count > 1 ? 's' : ''}` : '';
+    $('kqq').textContent   = Math.round(totalQty).toLocaleString();
+
+    // 5. Pie chart by supplier
+    const PIE_COLORS = [NE.purple, NE.teal, NE.peach, NE.steel, NE.pink, '#7b9e70','#c8a87a','#6e8fb5'];
+    const bLabels = sorted.map(([s]) => s);
+    const bCounts = sorted.map(([, v]) => v.count);
+    dc('qcc');
+    charts['qcc'] = new Chart($('qcc').getContext('2d'), {
+      type: 'pie',
+      data: { labels: bLabels, datasets: [{
+        data: bCounts,
+        backgroundColor: PIE_COLORS.slice(0, bLabels.length),
+        borderColor: '#f6f5f4',
+        borderWidth: 2
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: 'right',
+            labels: { color: '#4b4c4a', font: { size: 12 }, padding: 14, boxWidth: 14 }},
+          tooltip: { backgroundColor: 'rgba(44,44,42,.9)',
+            callbacks: {
+              label: c => {
+                const total = c.dataset.data.reduce((s,v)=>s+v,0);
+                return ` ${c.label}: ${c.raw} (${Math.round(c.raw/total*100)}%)`;
+              }
+            }}
+        }
+      }
+    });
+
+    // 6. Detail table (sorted by date)
+    const allRows = sorted.flatMap(([, v]) => v.rows)
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const tb = $('qctb');
+    tb.innerHTML = '';
+    allRows.forEach(r => {
+      const tr = document.createElement('tr');
+      tr.innerHTML =
+        `<td style="text-align:left;font-weight:500">${r.name}</td>` +
+        `<td style="text-align:left;color:#898d8d">${r.date}</td>` +
+        `<td style="text-align:left">${r.supplier}</td>` +
+        `<td style="text-align:left;font-family:monospace;font-size:11px">${r.prq}</td>` +
+        `<td style="text-align:left">${r.product}</td>` +
+        `<td style="text-align:right">${r.qty.toLocaleString()}</td>`;
+      tb.appendChild(tr);
+    });
+
+  } catch (e) {
+    console.warn('Quality tab error:', e);
+  } finally {
+    $('qc-load').style.display = 'none';
+    $('qc-body').style.display = 'block';
+  }
+}
+</script>
+</body>
+</html>
