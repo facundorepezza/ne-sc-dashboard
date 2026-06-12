@@ -84,7 +84,7 @@ body { font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; background
 .cw { background: #fff; border: 0.5px solid #d3d1c7; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.1rem; }
 .cw-title { font-size: 12px; font-weight: 500; color: #444441; margin-bottom: .7rem; }
 .cv { position: relative; width: 100%; }
-.cv-260 { height: 260px; } .cv-240 { height: 240px; } .cv-300 { height: 300px; }
+.cv-260 { height: 260px; } .cv-240 { height: 240px; } .cv-300 { height: 300px; } .cv-400 { height: 400px; } .cv-500 { height: 500px; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.1rem; }
 .two-col .cw { margin-bottom: 0; }
 
@@ -164,9 +164,24 @@ select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; paddi
     <div id="cogs-body" style="display:none">
       <div class="kpi-row c4">
         <div class="kpi"><div class="kpi-lbl">Revenue YTD</div><div class="kpi-val b" id="kr">—</div></div>
-        <div class="kpi"><div class="kpi-lbl">COGS YTD</div><div class="kpi-val r" id="kc">—</div></div>
+        <div class="kpi"><div class="kpi-lbl">COGS YTD</div><div class="kpi-val r" id="kc">—</div><div class="kpi-sub" id="kc-s"></div></div>
         <div class="kpi"><div class="kpi-lbl">Gross Profit YTD</div><div class="kpi-val g" id="kgp">—</div></div>
         <div class="kpi"><div class="kpi-lbl">Gross Margin YTD</div><div class="kpi-val g" id="kgm">—</div></div>
+      </div>
+      <div class="kpi-row c1" style="margin-bottom:4px">
+        <div class="kpi" style="padding:12px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span class="kpi-lbl" style="margin:0">COGS vs Annual Limit (€897,431)</span>
+            <span id="cogs-pct" style="font-size:13px;font-weight:600;color:#888780"></span>
+          </div>
+          <div style="background:#e8e7e3;border-radius:4px;height:10px;overflow:hidden">
+            <div id="cogs-bar" style="height:100%;width:0%;border-radius:4px;transition:width .4s;background:#F5C4AF"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:11px;color:#888780">
+            <span id="cogs-ytd-eur">—</span>
+            <span>Limit: €897,431 (~<span id="cogs-tgt-usd">—</span>)</span>
+          </div>
+        </div>
       </div>
       <div class="cw">
         <div class="cw-title">Monthly Revenue vs COGS (USD) + GM%</div>
@@ -182,12 +197,12 @@ select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; paddi
         <table>
           <thead><tr>
             <th style="text-align:left">Month</th>
-            <th>Revenue ($)</th><th>Device COGS ($)</th><th>Acc. COGS ($)</th>
-            <th>Total COGS ($)</th><th>Gross Profit ($)</th><th>GM%</th>
+            <th>Revenue ($)</th><th>COGS ($)</th>
+            <th>Gross Profit ($)</th><th>GM%</th>
           </tr></thead>
           <tbody id="ctb"></tbody>
         </table>
-        <div class="note">Revenue: NE BCN EUR × monthly FX + NE INC USD. COGS: Odoo standard_price × invoiced qty.</div>
+        <div class="note">Revenue: Finance segments (PHARMA + CLINICAL + RESEARCH + INCONSISTENCY) via AML → SO join. COGS: Odoo standard_price × invoiced qty × EUR→USD FX.</div>
       </div>
     </div>
   </div>
@@ -200,17 +215,15 @@ select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; paddi
         <label>Supplier:</label>
         <select id="sup-sel" onchange="renderSup()"><option value="all">All Suppliers</option></select>
       </div>
-      <div class="kpi-row c4">
+      <div class="kpi-row c2">
         <div class="kpi"><div class="kpi-lbl">OTD %</div><div class="kpi-val g" id="kotd">—</div><div class="kpi-sub" id="kotd-s"></div></div>
         <div class="kpi"><div class="kpi-lbl">Avg Lead Time (days)</div><div class="kpi-val" id="klt">—</div><div class="kpi-sub" id="klt-s">PO approval → receipt</div></div>
-        <div class="kpi"><div class="kpi-lbl">TSP (Avg Approval Days)</div><div class="kpi-val" id="ktsp">—</div><div class="kpi-sub" id="ktsp-s">PO create → approve</div></div>
-        <div class="kpi"><div class="kpi-lbl">QC Failures</div><div class="kpi-val" id="kqc">—</div><div class="kpi-sub" id="kqc-s"></div></div>
       </div>
       <div class="two-col">
         <div class="cw"><div class="cw-title">OTD % by Month</div><div class="cv cv-240"><canvas id="otdc"></canvas></div></div>
         <div class="cw"><div class="cw-title">Avg Lead Time by Supplier (days, top 12)</div><div class="cv cv-240"><canvas id="ltc"></canvas></div></div>
       </div>
-      <div class="note">OTD: date_done ≥ scheduled_date · Lead Time: actual receipt − PO approval · TSP: PO approval − creation · Filter: user_id=484 · 2025–2026 YTD</div>
+      <div class="note">OTD: date_done ≤ scheduled_date + 2d grace · Lead Time: receipt − PO approval (outliers &gt;100d excluded) · TSP: PO approval − creation · Filter: POs confirmed in 2026 · user_id=484</div>
     </div>
   </div>
 
@@ -220,10 +233,25 @@ select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; paddi
     <div id="inv-body" style="display:none">
       <div class="kpi-row c2">
         <div class="kpi"><div class="kpi-lbl">Stock Value (EUR)</div><div class="kpi-val b" id="ksv">—</div><div class="kpi-sub" id="ksv-s"></div></div>
-        <div class="kpi"><div class="kpi-lbl">Inventory Turnover</div><div class="kpi-val" id="kit">—</div><div class="kpi-sub" id="kit-s">COGS ÷ Avg Inventory</div></div>
+        <div class="kpi"><div class="kpi-lbl">Max Allowed Stock</div><div class="kpi-val" id="kit">€589,963</div><div class="kpi-sub" id="kit-s">Based on 240-day DIO · COGS target €897,431</div></div>
+      </div>
+      <div class="kpi-row c1" style="margin-bottom:4px">
+        <div class="kpi" style="padding:12px 16px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span class="kpi-lbl" style="margin:0">Stock vs Max Allowed (240-day DIO limit)</span>
+            <span id="inv-pct" style="font-size:13px;font-weight:600"></span>
+          </div>
+          <div style="background:#e8e7e3;border-radius:4px;height:10px;overflow:hidden">
+            <div id="inv-bar" style="height:100%;width:0%;border-radius:4px;transition:width .4s"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:11px;color:#888780">
+            <span id="inv-current">—</span>
+            <span>Max: €589,963</span>
+          </div>
+        </div>
       </div>
       <div class="cw"><div class="cw-title">Stock Value by Reference (top 20, EUR)</div><div class="cv cv-300"><canvas id="sc"></canvas></div></div>
-      <div class="note">Source: stock.quant · Location: WH/IM/Stock/Intermediate &amp; raw material · Turnover: Annualized COGS (€) ÷ Stock Value (€). COGS from Odoo standard_price × invoiced qty.</div>
+      <div class="note">Source: stock.quant · Location: WH/IM/Stock/Intermediate &amp; raw material · Max Allowed Stock = (€897,431 ÷ 365) × 240 · Independent of live COGS.</div>
     </div>
   </div>
 
@@ -243,7 +271,7 @@ select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; paddi
           <span><span class="dot" style="background:#595478"></span>Ordered</span>
           <span><span class="dot" style="background:#A3C7D2"></span>Vendor Bills</span>
         </div>
-        <div class="cv cv-260"><canvas id="oc"></canvas></div>
+        <div class="cv cv-500"><canvas id="oc"></canvas></div>
       </div>
       <div class="note">Ordered: purchase.order.line · state in (purchase, done) · user_id=484 · purchase_ok=true · excl. Engineering Tools, Shipping (Eng), Discount · FX: EUR×1 / USD×0.9 / GBP×1.1 · by date_approve quarter. Vendor Bills: account.move (in_invoice, posted) from same POs · by invoice_date quarter. Forecast: annual budget Q1–Q4.</div>
     </div>
@@ -391,11 +419,10 @@ const MS  = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','
 const MI  = {January:0,February:1,March:2,April:3,May:4,June:5,July:6,August:7,September:8,October:9,November:10,December:11};
 
 const FX  = [1.195,1.175,1.145,1.160,1.165,1.175,1.170,1.170,1.170,1.170,1.170,1.170];
-const DEV = [5593,12656,25769,41188,33515,0,0,0,0,0,0,0];
-const ACC = [195.76,470.47,835.13,1000.22,332.37,566.36,0,0,0,0,0,0];
 const BCN_FB = [55793,135632,263006,225392,234485,4411,0,0,0,0,0,0];
 const INC_FB = [5117,11733,13357,216306,55418,0,0,0,0,0,0,0];
 const FX_FLAT = 1.1976;
+const COG = new Array(12).fill(0); // live COGS (USD), computed from standard_price × qty × FX
 
 // ── State ─────────────────────────────────────────────────────────────────
 const REV = new Array(12).fill(0);
@@ -409,6 +436,22 @@ const eur = n  => n == null ? '—' : '€' + Math.round(n).toLocaleString('en-U
 const pct = v  => v == null ? '—' : (v * 100).toFixed(1) + '%';
 const dc  = id => { if (charts[id]) { charts[id].destroy(); delete charts[id]; } };
 const daysStr = d => d == null ? '—' : Math.round(d) + ' d';
+
+// OTD colour gradient: <30% red → 30-50% amber → 50-60% transition → 60%+ green
+function otdColor(p) {
+  if (p == null) return '#888780';
+  const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+  const rgb = (r,g,b) => `rgb(${r},${g},${b})`;
+  if (p < 0.30) return '#c0392b';                              // red
+  if (p < 0.50) return '#c67d00';                              // amber
+  if (p < 0.60) {                                              // amber → light green
+    const t = (p - 0.50) / 0.10;
+    return rgb(lerp(198,80,t), lerp(125,160,t), lerp(0,40,t));
+  }
+  // 60% → 100%: light green → NE green
+  const t = Math.min((p - 0.60) / 0.40, 1);
+  return rgb(lerp(80,15,t), lerp(160,110,t), lerp(40,86,t));
+}
 
 // ── Tab switching ─────────────────────────────────────────────────────────
 function go(name, btn) {
@@ -435,54 +478,232 @@ function initDashboard() {
 
 // ══════════════════════════════════════════════════════════════════════════
 // COGS TAB
+// Revenue mirrors Finance master dashboard (PHARMA + CLINICAL + RESEARCH + INCONSISTENCY, USD)
+// Join chain: account.move.line → sale.order.line → sale.order  (same as SQL)
 // ══════════════════════════════════════════════════════════════════════════
 async function loadCOGS() {
   try {
-    const rows = await readGroup('account.move',
-      ['&','&','&','&',
-        ['move_type','=','out_invoice'],['state','=','posted'],
-        ['invoice_date','>=','2026-01-01'],['invoice_date','<','2027-01-01'],
-        ['partner_id','!=',7095],
-        '|',
-        ['&',['journal_id','=',5],['currency_id','=',1]],
-        ['&',['journal_id','=',51],['currency_id','=',2]]],
-      ['invoice_date:month','currency_id','amount_untaxed'],
-      ['invoice_date:month','currency_id'], 30
+    // ── 1. Invoice LINES from 2026 posted invoices (BCN=1, US=3) that are
+    //       linked to at least one SO line — mirrors SQL INNER JOIN ────────
+    const aml = await searchRead('account.move.line',
+      ['&','&','&',
+        ['move_id.state','=','posted'],
+        ['move_id.move_type','in',['out_invoice','out_refund']],
+        ['move_id.invoice_date','>=','2026-01-01'],
+        ['move_id.invoice_date','<','2027-01-01'],
+        ['move_id.company_id','in',[1,3]],
+        ['sale_line_ids','!=',false]],
+      ['id','move_id','price_subtotal','currency_id','sale_line_ids','product_id','quantity'], 5000
     );
-    if (rows.length) {
-      const em = {}, um = {};
-      for (const row of rows) {
-        const mn = (row['invoice_date:month'] || '').split(' ')[0];
-        const mi = MI[mn]; if (mi === undefined) continue;
-        const cid = Array.isArray(row.currency_id) ? row.currency_id[0] : row.currency_id;
-        if (cid === 1) em[mi] = (em[mi] || 0) + row.amount_untaxed;
-        else           um[mi] = (um[mi] || 0) + row.amount_untaxed;
-      }
-      for (let i = 0; i < 12; i++) REV[i] = Math.round((em[i] || 0) * FX[i] + (um[i] || 0));
-    } else {
-      for (let i = 0; i < 12; i++) REV[i] = Math.round(BCN_FB[i] * FX_FLAT + INC_FB[i]);
+
+    // ── 2. Invoice metadata (date + type) for those move_ids ──────────────
+    const invIds = [...new Set(aml.map(l => Array.isArray(l.move_id) ? l.move_id[0] : l.move_id))];
+    const invMap = {};
+    if (invIds.length) {
+      const invs = await searchRead('account.move',
+        [['id','in',invIds]],
+        ['id','invoice_date','move_type','currency_id','company_id'], 2000
+      );
+      invs.forEach(inv => { invMap[inv.id] = inv; });
     }
+
+    // ── 2b. Historical EUR→USD rates from Odoo (mirrors SQL LATERAL join) ─
+    // rate = USD per 1 EUR (for EUR-based company 1), used to convert EUR→USD
+    const rawRates = await searchRead('res.currency.rate',
+      [['currency_id.name','=','USD'],
+       ['company_id','in',[1,3]]],
+      ['id','name','rate','company_id'], 500
+    );
+    // Build per-company sorted rate list: [{date, rate}, ...]
+    const ratesByCompany = {1:[], 3:[]};
+    rawRates.forEach(r => {
+      const cid = Array.isArray(r.company_id) ? r.company_id[0] : r.company_id;
+      if (ratesByCompany[cid]) ratesByCompany[cid].push({date: r.name, rate: r.rate});
+    });
+    [1,3].forEach(cid => ratesByCompany[cid].sort((a,b) => a.date < b.date ? -1 : 1));
+
+    // Get most recent rate on or before invoiceDate, per company
+    function getUSDRate(invoiceDate, companyId) {
+      const list = ratesByCompany[companyId] || ratesByCompany[1] || [];
+      let rate = FX[new Date(invoiceDate).getMonth()]; // hardcoded fallback
+      for (const r of list) {
+        if (r.date <= invoiceDate) rate = r.rate;
+        else break;
+      }
+      return rate;
+    }
+
+    // ── 3. sale.order.line → order_id ────────────────────────────────────
+    const solIds = [...new Set(aml.flatMap(l => l.sale_line_ids || []))];
+    const solOrderMap = {}; // sol.id → so.id
+    if (solIds.length) {
+      const sols = await searchRead('sale.order.line',
+        [['id','in',solIds]],
+        ['id','order_id'], 5000
+      );
+      sols.forEach(s => { solOrderMap[s.id] = Array.isArray(s.order_id) ? s.order_id[0] : s.order_id; });
+    }
+
+    // ── 4. sale.order with classification fields ──────────────────────────
+    const soIds = [...new Set(Object.values(solOrderMap).filter(Boolean))];
+    const soMapById = {};
+    if (soIds.length) {
+      const sos = await searchRead('sale.order',
+        [['id','in',soIds]],
+        ['id','company_id','partner_id','user_id','tag_ids','origin'], 3000
+      );
+
+      // ── 5. Tags ─────────────────────────────────────────────────────────
+      const tagIds = [...new Set(sos.flatMap(so => so.tag_ids || []))];
+      const tagMap = {};
+      if (tagIds.length) {
+        const tags = await searchRead('crm.tag', [['id','in',tagIds]], ['id','name'], 500);
+        tags.forEach(t => { tagMap[t.id] = (typeof t.name === 'string' ? t.name : (t.name?.en_US||'')).toLowerCase(); });
+      }
+      sos.forEach(so => {
+        so.tagStr = (so.tag_ids||[]).map(tid => tagMap[tid]||'').join(', ');
+        soMapById[so.id] = so;
+      });
+    }
+
+    // ── 5b. Product standard_prices (EUR) for live COGS ─────────────────
+    const productIds = [...new Set(aml.map(l => Array.isArray(l.product_id) ? l.product_id[0] : l.product_id).filter(Boolean))];
+    const productMap = {};
+    if (productIds.length) {
+      const prods = await searchRead('product.product',
+        [['id','in',productIds]],
+        ['id','standard_price'], 500
+      );
+      prods.forEach(p => { productMap[p.id] = p.standard_price || 0; });
+    }
+
+    // ── 6. Aggregate line amounts by invoice month (USD) ─────────────────
+    for (let i = 0; i < 12; i++) { REV[i] = 0; COG[i] = 0; }
+
+    for (const line of aml) {
+      // Get SO for this line (use first matching sol)
+      let soId = null;
+      for (const solId of (line.sale_line_ids || [])) {
+        if (solOrderMap[solId]) { soId = solOrderMap[solId]; break; }
+      }
+      if (!soId) continue;
+      const so = soMapById[soId];
+      const seg = so ? classifySegment(so) : null;
+      if (!seg) continue;
+
+      const invId    = Array.isArray(line.move_id) ? line.move_id[0] : line.move_id;
+      const inv      = invMap[invId];
+      if (!inv?.invoice_date) continue;
+
+      const month    = new Date(inv.invoice_date).getMonth();
+      const invCoy   = Array.isArray(inv.company_id) ? inv.company_id[0] : (inv.company_id || 1);
+      const ccy      = (Array.isArray(line.currency_id) ? line.currency_id[1] : null)
+                    || (Array.isArray(inv.currency_id)   ? inv.currency_id[1]  : 'USD');
+      const sign     = inv.move_type === 'out_refund' ? -1 : 1;
+      const fxRate   = ccy === 'EUR' ? getUSDRate(inv.invoice_date, invCoy) : 1;
+      const amt      = sign * line.price_subtotal * fxRate;
+      REV[month]    += amt;
+
+      // COGS: standard_price (EUR from BCN context) × qty × EUR→USD rate
+      const prodId   = Array.isArray(line.product_id) ? line.product_id[0] : line.product_id;
+      const costEUR  = prodId ? (productMap[prodId] || 0) : 0;
+      const fxCost   = getUSDRate(inv.invoice_date, 1); // always EUR→USD (BCN rate)
+      COG[month]    += sign * (line.quantity || 0) * costEUR * fxCost;
+    }
+    for (let i = 0; i < 12; i++) { REV[i] = Math.round(REV[i]); COG[i] = Math.round(COG[i]); }
   } catch(e) {
+    console.error('loadCOGS:', e);
     for (let i = 0; i < 12; i++) REV[i] = Math.round(BCN_FB[i] * FX_FLAT + INC_FB[i]);
   }
   renderCOGS();
 }
 
+// Classify a sale.order mirroring the 4 Finance SQL segments exactly.
+// Returns: 'PHARMA' | 'CLINICAL' | 'RESEARCH' | 'INCONSISTENCY' | null
+// null = excluded from all segments (not counted in Revenue).
+function classifySegment(so) {
+  const company  = Array.isArray(so.company_id) ? so.company_id[0] : so.company_id;
+  const customer = (Array.isArray(so.partner_id) ? so.partner_id[1] : '').toLowerCase();
+  const sales    = (Array.isArray(so.user_id)    ? so.user_id[1]    : '').toLowerCase();
+  const tags     = (so.tagStr || '').toLowerCase();
+  const origin   = (so.origin || '').trim();
+
+  // ── Query A: PHARMA ──────────────────────────────────────────────────────
+  // WHERE LOWER(rp.name) LIKE '%longboard%' OR LIKE '%alto%'
+  if (customer.includes('longboard') || customer.includes('alto')) return 'PHARMA';
+
+  // ── Query B: CLINICAL ────────────────────────────────────────────────────
+  // WHERE (company=3 AND (clinical OR hospital tags))
+  //    OR (company=1 AND (2026_clinical OR hospital tags))
+  if (company === 3 && (tags.includes('clinical') || tags.includes('hospital'))) return 'CLINICAL';
+  if (company === 1 && (tags.includes('2026_clinical') || tags.includes('hospital'))) return 'CLINICAL';
+
+  // ── Query C: RESEARCH ────────────────────────────────────────────────────
+  // (also excludes clinical — handled by priority above)
+  // WHERE (company=3 AND darth)
+  //    OR (company=1 AND 2026_research)
+  //    OR (company=1 AND darth AND NOT neuroelectrics usa)
+  //    OR (company=1 AND bo)
+  if (company === 3 && sales.includes('darth')) return 'RESEARCH';
+  if (company === 1 && tags.includes('2026_research') && !customer.includes('neuroelectrics usa')) return 'RESEARCH';
+  if (company === 1 && sales.includes('darth') && !customer.includes('neuroelectrics usa')) return 'RESEARCH';
+  if (company === 1 && sales.includes('bo')) return 'RESEARCH';
+
+  // ── Query D: INCONSISTENCY ───────────────────────────────────────────────
+  // D1: Exclude SC-originated (SQL: LEFT JOIN sale_order sc ON origin=sc.name AND origin LIKE 'SC%', AND sc.name IS NULL)
+  if (/^SC/i.test(origin)) return null;
+  // D2: Exclude BCN Darth (SQL: AND NOT (darth AND company<>3))
+  if (company === 1 && sales.includes('darth')) return null;
+  // D3: US — non-Darth qualifies (Darth already returned RESEARCH above)
+  if (company === 3) return 'INCONSISTENCY';
+  // D4: BCN — positive conditions:
+  //   (antoine OR xavi OR rafal) AND NOT ILIKE '%2026_%'  → no 2026_ tag
+  //   OR NOT (antoine OR xavi OR rafal)  → any other salesperson
+  if (company === 1) {
+    const isAXR = sales.includes('antoine') || sales.includes('xavi') || sales.includes('rafal');
+    if (isAXR) {
+      // AXR with 2026_ tag → not in any segment (Finance SQL excludes this via positive condition)
+      return tags.includes('2026_') ? null : 'INCONSISTENCY';
+    }
+    // non-AXR (Bo/Darth already handled above, other salespersons fall here)
+    return 'INCONSISTENCY';
+  }
+
+  return null; // other companies
+}
+
 function renderCOGS() {
   const idx = [];
-  for (let i = 0; i < 12; i++) if (REV[i] > 0 || DEV[i] + ACC[i] > 0) idx.push(i);
+  for (let i = 0; i < 12; i++) if (REV[i] > 0 || COG[i] > 0) idx.push(i);
 
-  let ytdR = 0, ytdD = 0, ytdA = 0;
-  for (const i of idx) { ytdR += REV[i]; ytdD += DEV[i] * FX[i]; ytdA += ACC[i] * FX[i]; }
-  const ytdC = ytdD + ytdA, ytdGP = ytdR - ytdC, ytdGM = ytdR > 0 ? ytdGP / ytdR : 0;
+  const COGS_TARGET_EUR = 897431;
+  const avgFXr = FX.reduce((s,x)=>s+x,0)/FX.length; // avg EUR→USD for target display
+
+  let ytdR = 0, ytdC = 0;
+  for (const i of idx) { ytdR += REV[i]; ytdC += COG[i]; }
+  const ytdGP = ytdR - ytdC, ytdGM = ytdR > 0 ? ytdGP / ytdR : 0;
 
   $('kr').textContent = usd(ytdR);  $('kc').textContent = usd(ytdC);
   $('kgp').textContent = usd(ytdGP); $('kgm').textContent = pct(ytdGM);
 
+  // COGS progress bar vs annual target
+  const ytdCeur = ytdC / avgFXr; // approx EUR equivalent
+  const cogsRatio = Math.min(ytdCeur / COGS_TARGET_EUR, 1.5); // cap bar at 150%
+  const cogsBarPct = Math.min(cogsRatio * 100, 100);
+  const cogsPct = ytdCeur / COGS_TARGET_EUR;
+  const cogsColor = cogsPct >= 1 ? '#e05a5a' : cogsPct >= 0.85 ? '#e8a838' : '#1d9e75';
+  $('cogs-bar').style.width = cogsBarPct + '%';
+  $('cogs-bar').style.background = cogsColor;
+  $('cogs-pct').textContent = (cogsPct * 100).toFixed(1) + '% of limit';
+  $('cogs-pct').style.color = cogsColor;
+  $('cogs-ytd-eur').textContent = 'YTD: ~€' + Math.round(ytdCeur).toLocaleString();
+  $('cogs-tgt-usd').textContent = usd(COGS_TARGET_EUR * avgFXr);
+  $('kc-s').textContent = cogsPct >= 1 ? '⚠ over limit' : cogsPct >= 0.85 ? '⚠ near limit' : 'within limit';
+
   const labels = idx.map(i => MS[i]);
   const revD   = idx.map(i => REV[i]);
-  const cogD   = idx.map(i => (DEV[i] + ACC[i]) * FX[i]);
-  const gmD    = idx.map(i => REV[i] > 0 ? +(((REV[i] - (DEV[i] + ACC[i]) * FX[i]) / REV[i] * 100).toFixed(1)) : null);
+  const cogD   = idx.map(i => COG[i]);
+  const gmD    = idx.map(i => REV[i] > 0 ? +(((REV[i] - COG[i]) / REV[i] * 100).toFixed(1)) : null);
 
   dc('cc');
   charts['cc'] = new Chart($('cc').getContext('2d'), {
@@ -511,22 +732,22 @@ function renderCOGS() {
   });
 
   const tb = $('ctb'); tb.innerHTML = '';
-  let tR = 0, tD = 0, tA = 0;
+  let tR = 0, tC = 0;
   for (const i of idx) {
-    const dc2 = DEV[i]*FX[i], ac = ACC[i]*FX[i], tc = dc2+ac, gp = REV[i]-tc;
+    const tc = COG[i], gp = REV[i] - tc;
     const gm = REV[i] > 0 ? gp / REV[i] : null;
-    tR += REV[i]; tD += dc2; tA += ac;
+    tR += REV[i]; tC += tc;
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${MN[i]}${i===5?'<span class="badge-p">partial</span>':''}</td>
-      <td>${usd(REV[i])}</td><td>${usd(dc2)}</td><td>${usd(ac)}</td>
-      <td>${usd(tc)}</td><td>${usd(gp)}</td>
+      <td>${usd(REV[i])}</td><td>${usd(tc)}</td>
+      <td>${usd(gp)}</td>
       <td style="color:${gm>0.85?'#0f6e56':'#2c2c2a'}">${pct(gm)}</td>`;
     tb.appendChild(tr);
   }
-  const ttc = tD+tA, tgp = tR-ttc, tgm = tR > 0 ? tgp/tR : 0;
+  const tgp = tR - tC, tgm = tR > 0 ? tgp / tR : 0;
   const tf = document.createElement('tr');
-  tf.innerHTML = `<td>YTD Total</td><td>${usd(tR)}</td><td>${usd(tD)}</td><td>${usd(tA)}</td>
-    <td>${usd(ttc)}</td><td>${usd(tgp)}</td><td style="color:#0f6e56">${pct(tgm)}</td>`;
+  tf.innerHTML = `<td>YTD Total</td><td>${usd(tR)}</td><td>${usd(tC)}</td>
+    <td>${usd(tgp)}</td><td style="color:#0f6e56">${pct(tgm)}</td>`;
   tb.appendChild(tf);
 
   $('cogs-load').style.display = 'none';
@@ -541,20 +762,33 @@ function renderCOGS() {
 async function loadSup() {
   allPk = []; allPO = {}; allQCFailed = null;
   try {
-    allPk = await searchRead('stock.picking',
-      [['picking_type_code','=','incoming'],['state','=','done'],
-       ['date_done','>=','2025-01-01'],['purchase_id.user_id','=',484]],
-      ['id','partner_id','date_done','scheduled_date','purchase_id'], 1000
+    // 1. Only POs confirmed in 2026
+    const pos = await searchRead('purchase.order',
+      [['date_approve','>=','2026-01-01'],['user_id','=',484]],
+      ['id','partner_id','date_approve','create_date'], 500
     );
+    pos.forEach(po => { allPO[po.id] = po; });
+    const poIds = pos.map(p => p.id);
 
-    if (allPk.length) {
-      const poIds = [...new Set(allPk.map(p => p.purchase_id?.[0]).filter(Boolean))];
-      if (poIds.length) {
-        const pos = await searchRead('purchase.order',
-          [['id','in',poIds]],
-          ['id','partner_id','date_approve','create_date'], 1000
+    if (poIds.length) {
+      // 2. Done receipts for those POs
+      allPk = await searchRead('stock.picking',
+        [['picking_type_code','=','incoming'],['state','=','done'],
+         ['purchase_id','in',poIds]],
+        ['id','partner_id','date_done','scheduled_date','purchase_id'], 1000
+      );
+
+      // 3. Exclude pickings whose moves are ALL Shipping or NEENGTOOL products
+      if (allPk.length) {
+        const pkIds = allPk.map(p => p.id);
+        const realMoves = await searchRead('stock.move',
+          [['picking_id','in',pkIds],['state','=','done'],
+           ['product_id.default_code','not ilike','%Shipping%'],
+           ['product_id.default_code','not ilike','%NEENGTOOL%']],
+          ['id','picking_id'], 2000
         );
-        pos.forEach(po => { allPO[po.id] = po; });
+        const pkWithRealProduct = new Set(realMoves.map(m => Array.isArray(m.picking_id) ? m.picking_id[0] : m.picking_id));
+        allPk = allPk.filter(p => pkWithRealProduct.has(p.id));
       }
     }
   } catch(e) { allPk = []; allPO = {}; }
@@ -587,16 +821,18 @@ function renderSup() {
   const sel = $('sup-sel').value;
   const pk  = sel === 'all' ? allPk : allPk.filter(p => String(p.partner_id?.[0]) === sel);
 
-  // OTD: date_done ≥ scheduled_date
+  // OTD: date_done ≤ scheduled_date + 2-day grace (physical reception lag)
+  const graceDays = 2 * 86400000;
   let onTime = 0, total = 0;
   pk.forEach(p => {
     if (!p.date_done || !p.scheduled_date) return;
     total++;
-    if (new Date(p.date_done) >= new Date(p.scheduled_date)) onTime++;
+    if (new Date(p.date_done) <= new Date(p.scheduled_date).getTime() + graceDays) onTime++;
   });
   const otdPct = total > 0 ? onTime / total : null;
   $('kotd').textContent = otdPct != null ? pct(otdPct) : '—';
-  $('kotd').className = 'kpi-val ' + (otdPct==null?'':(otdPct>=.85?'g':otdPct>=.70?'a':'r'));
+  $('kotd').className = 'kpi-val';
+  $('kotd').style.color = otdColor(otdPct);
   $('kotd-s').textContent = total > 0 ? `${onTime} / ${total} receipts` : '';
 
   // Lead Time: date_done − po.date_approve
@@ -607,7 +843,7 @@ function renderSup() {
     const po = allPO[p.purchase_id[0]];
     if (!po?.date_approve) return;
     const d = Math.max(1, (new Date(p.date_done) - new Date(po.date_approve)) / 86400000);
-    if (d > 730) return;
+    if (d > 100) return;
     ltSum += d; ltCount++;
     const nm = (p.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/,'');
     if (!ltBySupplier[nm]) ltBySupplier[nm] = [];
@@ -618,32 +854,6 @@ function renderSup() {
   $('klt').className = 'kpi-val ' + (ltAvg==null?'':(ltAvg<=30?'g':ltAvg<=60?'a':'r'));
   $('klt-s').textContent = ltCount > 0 ? `avg over ${ltCount} receipts` : 'PO approval → receipt';
 
-  // TSP: po.date_approve − po.create_date
-  const poList = sel === 'all'
-    ? Object.values(allPO)
-    : Object.values(allPO).filter(po => String(po.partner_id?.[0]) === sel);
-  let tspSum = 0, tspCount = 0;
-  poList.forEach(po => {
-    if (!po.date_approve || !po.create_date) return;
-    const d = Math.max(1, (new Date(po.date_approve) - new Date(po.create_date)) / 86400000);
-    if (d > 365) return;
-    tspSum += d; tspCount++;
-  });
-  const tspAvg = tspCount > 0 ? tspSum / tspCount : null;
-  $('ktsp').textContent = daysStr(tspAvg);
-  $('ktsp').className = 'kpi-val ' + (tspAvg==null?'':(tspAvg<=7?'g':tspAvg<=14?'a':'r'));
-  $('ktsp-s').textContent = tspCount > 0 ? `avg over ${tspCount} POs` : 'PO create → approve';
-
-  // QC
-  if (allQCFailed === null) {
-    $('kqc').textContent = 'N/A'; $('kqc').className = 'kpi-val';
-    $('kqc-s').textContent = 'qc.inspection not accessible';
-  } else {
-    $('kqc').textContent = String(allQCFailed);
-    $('kqc').className = 'kpi-val ' + (allQCFailed===0?'g':allQCFailed<5?'a':'r');
-    $('kqc-s').textContent = 'qc.inspection failures';
-  }
-
   // OTD by month chart
   const mOTD = {}, mTot = {};
   pk.forEach(p => {
@@ -651,12 +861,12 @@ function renderSup() {
     const dt = new Date(p.date_done);
     const k  = dt.getFullYear() + '-' + String(dt.getMonth()).padStart(2,'0');
     mTot[k] = (mTot[k] || 0) + 1;
-    if (new Date(p.date_done) >= new Date(p.scheduled_date)) mOTD[k] = (mOTD[k] || 0) + 1;
+    if (new Date(p.date_done) <= new Date(p.scheduled_date).getTime() + graceDays) mOTD[k] = (mOTD[k] || 0) + 1;
   });
   const mKeys     = Object.keys(mTot).sort();
   const otdLabels = mKeys.map(k => { const[y,m]=k.split('-'); return MS[+m]+(y==='2025'?"'25":"'26"); });
   const otdVals   = mKeys.map(k => mTot[k]>0 ? +((mOTD[k]||0)/mTot[k]*100).toFixed(1) : null);
-  const otdColors = otdVals.map(v => v==null?'#d3d1c7':v>=85?NE.teal:v>=70?NE.peach:NE.pink);
+  const otdColors = otdVals.map(v => v == null ? '#d3d1c7' : otdColor(v / 100));
 
   dc('otdc');
   charts['otdc'] = new Chart($('otdc').getContext('2d'), {
@@ -723,23 +933,23 @@ async function loadInv() {
 
   const totalVal = items.reduce((s,x) => s+x.val, 0);
 
-  // Annualized COGS in EUR from hardcoded arrays (DEV + ACC)
-  let cogsYTD = 0, nMonths = 0;
-  for (let i = 0; i < 12; i++) {
-    if (DEV[i] > 0 || ACC[i] > 0) { cogsYTD += DEV[i] + ACC[i]; nMonths++; }
-  }
-  const cogsAnn  = nMonths > 0 ? cogsYTD / nMonths * 12 : 0;
-  const turnover = totalVal > 0 && cogsAnn > 0 ? cogsAnn / totalVal : null;
-  const diodays  = turnover > 0 ? 365 / turnover : null;
+  // Max allowed stock = (COGS target / 365) × 240 days — fixed, no dependency on live COGS
+  const MAX_STOCK_EUR = Math.round(897431 / 365 * 240); // €589,963
 
   $('ksv').textContent = eur(totalVal);
   $('ksv-s').textContent = `${items.length} products · IM stock`;
 
-  $('kit').textContent = turnover != null ? turnover.toFixed(2) + '×' : '—';
-  $('kit').className = 'kpi-val ' + (turnover==null?'':(turnover>=2?'g':turnover>=1.52?'a':'r'));
-  $('kit-s').textContent = diodays != null
-    ? `≈ ${Math.round(diodays)} days · target > 1.52× (< 240 d)`
-    : 'No COGS data';
+  // Inventory progress bar vs max allowed
+  const invRatio = totalVal / MAX_STOCK_EUR;
+  const invBarPct = Math.min(invRatio * 100, 100);
+  const invColor = invRatio >= 1 ? '#e05a5a' : invRatio >= 0.85 ? '#e8a838' : '#1d9e75';
+  $('inv-bar').style.width = invBarPct + '%';
+  $('inv-bar').style.background = invColor;
+  $('inv-pct').textContent = (invRatio * 100).toFixed(1) + '% of limit';
+  $('inv-pct').style.color = invColor;
+  $('inv-current').textContent = 'Current: ' + eur(totalVal);
+
+  $('kit').className = 'kpi-val ' + (invRatio >= 1 ? 'r' : invRatio >= 0.85 ? 'a' : 'g');
 
   const top = items.slice(0,20);
   dc('sc');
@@ -891,13 +1101,13 @@ async function loadOrd() {
       interaction:{mode:'index',intersect:false},
       plugins:{
         legend:{display:true, position:'top',
-          labels:{color:'#4b4c4a', font:{size:11}, boxWidth:12, padding:14}},
+          labels:{color:'#4b4c4a', font:{size:13}, boxWidth:14, padding:18}},
         tooltip:{backgroundColor:'rgba(44,44,42,.9)',
           callbacks:{label:c=>` ${c.dataset.label}: ${eur(c.raw)}`}}},
       scales:{
         y:{ grid:{color:'rgba(0,0,0,.05)'},
-            ticks:{color:'#888780', font:{size:11}, callback:fmtK}},
-        x:{ grid:{display:false}, ticks:{color:'#888780', font:{size:13}, autoSkip:false}}
+            ticks:{color:'#888780', font:{size:13}, callback:fmtK}},
+        x:{ grid:{display:false}, ticks:{color:'#4b4c4a', font:{size:15, weight:'500'}, autoSkip:false}}
       }
     }
   });
