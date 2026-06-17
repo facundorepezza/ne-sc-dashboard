@@ -84,7 +84,7 @@ body { font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; background
 .cw { background: #fff; border: 0.5px solid #d3d1c7; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1.1rem; }
 .cw-title { font-size: 12px; font-weight: 500; color: #444441; margin-bottom: .7rem; }
 .cv { position: relative; width: 100%; }
-.cv-260 { height: 260px; } .cv-240 { height: 240px; } .cv-300 { height: 300px; } .cv-400 { height: 400px; } .cv-500 { height: 500px; }
+.cv-260 { height: 260px; } .cv-240 { height: 240px; } .cv-300 { height: 300px; } .cv-340 { height: 340px; } .cv-400 { height: 400px; } .cv-500 { height: 500px; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 1.1rem; }
 .two-col .cw { margin-bottom: 0; }
 
@@ -223,7 +223,11 @@ select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; paddi
         <div class="cw"><div class="cw-title">OTD % by Month</div><div class="cv cv-240"><canvas id="otdc"></canvas></div></div>
         <div class="cw"><div class="cw-title">Avg Lead Time by Supplier (days, top 12)</div><div class="cv cv-240"><canvas id="ltc"></canvas></div></div>
       </div>
-      <div class="note">OTD: date_done ≤ scheduled_date + 2d grace · Lead Time: receipt − PO approval (outliers &gt;100d excluded) · TSP: PO approval − creation · Filter: POs confirmed in 2026 · user_id=484</div>
+      <div class="row">
+        <div class="cw"><div class="cw-title">Paid Spend by Supplier 2026 (EUR, top 15)</div><div class="cv cv-340"><canvas id="spdc"></canvas></div></div>
+        <div class="cw"><div class="cw-title">Upcoming Spend by Supplier 2026 (EUR, top 15)</div><div class="cv cv-340"><canvas id="spdc2"></canvas></div></div>
+      </div>
+      <div class="note">OTD: date_done ≤ scheduled_date + 2d grace · Lead Time: receipt − PO approval (outliers &gt;100d excluded) · Spend: purchase.order amount_untaxed · Filter: POs confirmed in 2026 · user_id=484</div>
     </div>
   </div>
 
@@ -427,7 +431,7 @@ const COG = new Array(12).fill(0); // live COGS (USD), computed from standard_pr
 // ── State ─────────────────────────────────────────────────────────────────
 const REV = new Array(12).fill(0);
 let loaded = {}, charts = {};
-let allPk = [], allPO = {}, allQCFailed = null;
+let allPk = [], allPO = {}, allQCFailed = null, allBills = [], allBillsPending = [];
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
@@ -760,12 +764,12 @@ function renderCOGS() {
 // TSP: date_approve − create_date · QC: qc.inspection · user_id=484
 // ══════════════════════════════════════════════════════════════════════════
 async function loadSup() {
-  allPk = []; allPO = {}; allQCFailed = null;
+  allPk = []; allPO = {}; allQCFailed = null; allBills = []; allBillsPending = [];
   try {
     // 1. Only POs confirmed in 2026
     const pos = await searchRead('purchase.order',
       [['date_approve','>=','2026-01-01'],['user_id','=',484]],
-      ['id','partner_id','date_approve','create_date'], 500
+      ['id','partner_id','date_approve','create_date','amount_untaxed','currency_id'], 500
     );
     pos.forEach(po => { allPO[po.id] = po; });
     const poIds = pos.map(p => p.id);
@@ -791,18 +795,41 @@ async function loadSup() {
         allPk = allPk.filter(p => pkWithRealProduct.has(p.id));
       }
     }
-  } catch(e) { allPk = []; allPO = {}; }
+    // 4. Paid vendor bills in 2026 linked to SC POs
+    if (poIds.length) {
+      allBills = await searchRead('account.move',
+        [['move_type','=','in_invoice'],
+         ['payment_state','in',['paid','in_payment']],
+         ['invoice_date','>=','2026-01-01'],
+         ['purchase_id','in',poIds]],
+        ['id','partner_id','amount_untaxed','currency_id','invoice_date'], 500
+      );
+      // 5. Pending (posted, not paid) vendor bills in 2026 linked to SC POs
+      allBillsPending = await searchRead('account.move',
+        [['move_type','=','in_invoice'],
+         ['state','=','posted'],
+         ['payment_state','in',['not_paid','partial']],
+         ['invoice_date','>=','2026-01-01'],
+         ['purchase_id','in',poIds]],
+        ['id','partner_id','amount_untaxed','currency_id','invoice_date'], 500
+      );
+    }
+  } catch(e) { allPk = []; allPO = {}; allBills = []; allBillsPending = []; }
 
   try {
     const qcRows = await searchRead('qc.inspection', [['state','=','failed']], ['id'], 500);
     allQCFailed = qcRows.length;
   } catch(e) { allQCFailed = null; }
 
-  // Populate dropdown
+  // Populate dropdown (from pickings + bills)
   const seen = new Map();
   allPk.forEach(p => {
     if (p.partner_id?.[0] && !seen.has(p.partner_id[0]))
       seen.set(p.partner_id[0], p.partner_id[1]);
+  });
+  allBills.forEach(b => {
+    if (b.partner_id?.[0] && !seen.has(b.partner_id[0]))
+      seen.set(b.partner_id[0], b.partner_id[1]);
   });
   const sel = $('sup-sel');
   while (sel.options.length > 1) sel.remove(1);
@@ -896,6 +923,63 @@ function renderSup() {
       scales:{
         x:{grid:{color:'rgba(0,0,0,.05)'},ticks:{color:'#888780',font:{size:11},callback:v=>v+'d'}},
         y:{grid:{display:false},ticks:{color:'#888780',font:{size:10}}}
+      }
+    }
+  });
+
+  // Spend by supplier chart (paid vendor bills)
+  const FX_USD = 0.92, FX_GBP = 1.18; // approx EUR equiv
+  const spendBySup = {};
+  const billsFiltered = sel === 'all' ? allBills : allBills.filter(b => String(b.partner_id?.[0]) === sel);
+  billsFiltered.forEach(b => {
+    const nm = (b.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/,'');
+    const ccy = Array.isArray(b.currency_id) ? b.currency_id[1] : 'EUR';
+    const amt = b.amount_untaxed * (ccy === 'USD' ? FX_USD : ccy === 'GBP' ? FX_GBP : 1);
+    spendBySup[nm] = (spendBySup[nm] || 0) + amt;
+  });
+  const spendArr = Object.entries(spendBySup)
+    .map(([s,v]) => ({s, v: Math.round(v)}))
+    .sort((a,b) => b.v - a.v).slice(0, 15);
+
+  dc('spdc');
+  charts['spdc'] = new Chart($('spdc').getContext('2d'), {
+    type: 'bar',
+    data: { labels: spendArr.map(e => e.s.length > 25 ? e.s.slice(0,23)+'…' : e.s),
+            datasets:[{label:'Paid (€)', data: spendArr.map(e=>e.v), backgroundColor: NE.tealA(.75), borderRadius:3}]},
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{backgroundColor:'rgba(44,44,42,.9)',callbacks:{label:c=>` €${c.raw.toLocaleString()}`}}},
+      scales:{
+        x:{grid:{color:'rgba(0,0,0,.05)'},ticks:{color:'#888780',font:{size:11},callback:v=>'€'+Math.round(v/1000)+'K'}},
+        y:{grid:{display:false},ticks:{color:'#4b4c4a',font:{size:11}}}
+      }
+    }
+  });
+
+  // Upcoming (pending) spend chart
+  const pendingFiltered = sel === 'all' ? allBillsPending : allBillsPending.filter(b => String(b.partner_id?.[0]) === sel);
+  const pendBySup = {};
+  pendingFiltered.forEach(b => {
+    const nm = (b.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/,'');
+    const ccy = Array.isArray(b.currency_id) ? b.currency_id[1] : 'EUR';
+    const amt = b.amount_untaxed * (ccy === 'USD' ? FX_USD : ccy === 'GBP' ? FX_GBP : 1);
+    pendBySup[nm] = (pendBySup[nm] || 0) + amt;
+  });
+  const pendArr = Object.entries(pendBySup)
+    .map(([s,v]) => ({s, v: Math.round(v)}))
+    .sort((a,b) => b.v - a.v).slice(0, 15);
+
+  dc('spdc2');
+  charts['spdc2'] = new Chart($('spdc2').getContext('2d'), {
+    type: 'bar',
+    data: { labels: pendArr.map(e => e.s.length > 25 ? e.s.slice(0,23)+'…' : e.s),
+            datasets:[{label:'Pending (€)', data: pendArr.map(e=>e.v), backgroundColor: 'rgba(232,168,56,.7)', borderRadius:3}]},
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{backgroundColor:'rgba(44,44,42,.9)',callbacks:{label:c=>` €${c.raw.toLocaleString()}`}}},
+      scales:{
+        x:{grid:{color:'rgba(0,0,0,.05)'},ticks:{color:'#888780',font:{size:11},callback:v=>'€'+Math.round(v/1000)+'K'}},
+        y:{grid:{display:false},ticks:{color:'#4b4c4a',font:{size:11}}}
       }
     }
   });
