@@ -224,8 +224,8 @@ select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; paddi
         <div class="cw"><div class="cw-title">Avg Lead Time by Supplier (days, top 12)</div><div class="cv cv-240"><canvas id="ltc"></canvas></div></div>
       </div>
       <div class="row">
-        <div class="cw"><div class="cw-title">Paid Spend by Supplier 2026 (EUR, top 15)</div><div class="cv cv-340"><canvas id="spdc"></canvas></div></div>
-        <div class="cw"><div class="cw-title">Upcoming Spend by Supplier 2026 (EUR, top 15)</div><div class="cv cv-340"><canvas id="spdc2"></canvas></div></div>
+        <div class="cw"><div class="cw-title">Invoiced POs by Supplier 2026 (EUR, top 15)</div><div class="cv cv-340"><canvas id="spdc"></canvas></div></div>
+        <div class="cw"><div class="cw-title">Pending POs by Supplier 2026 (EUR, top 15)</div><div class="cv cv-340"><canvas id="spdc2"></canvas></div></div>
       </div>
       <div class="note">OTD: date_done ≤ scheduled_date + 2d grace · Lead Time: receipt − PO approval (outliers &gt;100d excluded) · Spend: purchase.order amount_untaxed · Filter: POs confirmed in 2026 · user_id=484</div>
     </div>
@@ -777,7 +777,7 @@ async function loadSup() {
     // 1. Only POs confirmed in 2026
     const pos = await searchRead('purchase.order',
       [['date_approve','>=','2026-01-01'],['user_id','=',484]],
-      ['id','partner_id','date_approve','create_date','amount_untaxed','currency_id'], 500
+      ['id','partner_id','date_approve','create_date','amount_untaxed','currency_id','invoice_status'], 500
     );
     pos.forEach(po => { allPO[po.id] = po; });
     const poIds = pos.map(p => p.id);
@@ -805,22 +805,28 @@ async function loadSup() {
     }
     // 4. Paid vendor bills in 2026 linked to SC POs
     if (poIds.length) {
-      allBills = await searchRead('account.move',
+      const poIdSet = new Set(poIds);
+      const _filterBills = arr => arr.filter(b => {
+        const pid = Array.isArray(b.purchase_id) ? b.purchase_id[0] : b.purchase_id;
+        return pid && poIdSet.has(pid);
+      });
+
+      allBills = _filterBills(await searchRead('account.move',
         [['move_type','=','in_invoice'],
          ['payment_state','in',['paid','in_payment']],
          ['invoice_date','>=','2026-01-01'],
          ['purchase_id','in',poIds]],
-        ['id','partner_id','purchase_id','amount_untaxed','currency_id','invoice_date'], 500
-      );
+        ['id','partner_id','purchase_id','amount_untaxed','currency_id','invoice_date'], 1000
+      ));
       // 5. Pending (posted, not paid) vendor bills in 2026 linked to SC POs
-      allBillsPending = await searchRead('account.move',
+      allBillsPending = _filterBills(await searchRead('account.move',
         [['move_type','=','in_invoice'],
          ['state','=','posted'],
          ['payment_state','in',['not_paid','partial']],
          ['invoice_date','>=','2026-01-01'],
          ['purchase_id','in',poIds]],
-        ['id','partner_id','purchase_id','amount_untaxed','currency_id','invoice_date'], 500
-      );
+        ['id','partner_id','purchase_id','amount_untaxed','currency_id','invoice_date'], 1000
+      ));
     }
   } catch(e) { allPk = []; allPO = {}; allBills = []; allBillsPending = []; }
 
@@ -946,15 +952,18 @@ function renderSup() {
     }
   });
 
-  // Spend by supplier chart (paid vendor bills)
-  const FX_USD = 0.92, FX_GBP = 1.18; // approx EUR equiv
-  const spendBySup = {};
-  const billsFiltered = sel === 'all' ? allBills : allBills.filter(b => String(billSupId(b)) === sel);
-  billsFiltered.forEach(b => {
-    const nm = billSupNm(b);
-    const ccy = Array.isArray(b.currency_id) ? b.currency_id[1] : 'EUR';
-    const amt = b.amount_untaxed * (ccy === 'USD' ? FX_USD : ccy === 'GBP' ? FX_GBP : 1);
-    spendBySup[nm] = (spendBySup[nm] || 0) + amt;
+  // Spend by supplier — from PO amounts (bills not linked to POs in this instance)
+  const FX_USD = 0.92, FX_GBP = 1.18;
+  const poList = Object.values(allPO);
+  const poFiltered = sel === 'all' ? poList : poList.filter(po => String(po.partner_id?.[0]) === sel);
+
+  const spendBySup = {}, pendBySup2 = {};
+  poFiltered.forEach(po => {
+    const nm = (po.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/,'');
+    const ccy = Array.isArray(po.currency_id) ? po.currency_id[1] : 'EUR';
+    const amt = (po.amount_untaxed||0) * (ccy === 'USD' ? FX_USD : ccy === 'GBP' ? FX_GBP : 1);
+    if (po.invoice_status === 'invoiced') spendBySup[nm] = (spendBySup[nm]||0) + amt;
+    else pendBySup2[nm] = (pendBySup2[nm]||0) + amt;
   });
   const spendArr = Object.entries(spendBySup)
     .map(([s,v]) => ({s, v: Math.round(v)}))
@@ -975,16 +984,8 @@ function renderSup() {
     }
   });
 
-  // Upcoming (pending) spend chart
-  const pendingFiltered = sel === 'all' ? allBillsPending : allBillsPending.filter(b => String(billSupId(b)) === sel);
-  const pendBySup = {};
-  pendingFiltered.forEach(b => {
-    const nm = billSupNm(b);
-    const ccy = Array.isArray(b.currency_id) ? b.currency_id[1] : 'EUR';
-    const amt = b.amount_untaxed * (ccy === 'USD' ? FX_USD : ccy === 'GBP' ? FX_GBP : 1);
-    pendBySup[nm] = (pendBySup[nm] || 0) + amt;
-  });
-  const pendArr = Object.entries(pendBySup)
+  // Upcoming (pending) spend — POs not yet fully invoiced
+  const pendArr = Object.entries(pendBySup2)
     .map(([s,v]) => ({s, v: Math.round(v)}))
     .sort((a,b) => b.v - a.v).slice(0, 15);
 
