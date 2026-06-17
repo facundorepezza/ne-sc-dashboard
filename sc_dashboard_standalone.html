@@ -150,16 +150,16 @@ select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; paddi
       <button class="logout-btn" onclick="doLogout()">Logout</button>
     </div>
     <div class="tab-nav">
-      <button class="tab-btn active" onclick="go('cogs',this)">COGS</button>
+      <button class="tab-btn active" onclick="go('ord',this)">Orders</button>
       <button class="tab-btn" onclick="go('sup',this)">Supplier</button>
-      <button class="tab-btn" onclick="go('inv',this)">Inventory</button>
-      <button class="tab-btn" onclick="go('ord',this)">Orders</button>
+      <button class="tab-btn" onclick="go('cogs',this)">COGS</button>
       <button class="tab-btn" onclick="go('qc',this)">Quality</button>
+      <button class="tab-btn" onclick="go('inv',this)">Inventory</button>
     </div>
   </div>
 
   <!-- COGS -->
-  <div id="tab-cogs" class="panel on">
+  <div id="tab-cogs" class="panel">
     <div id="cogs-load" class="loading">Loading…</div>
     <div id="cogs-body" style="display:none">
       <div class="kpi-row c4">
@@ -260,7 +260,7 @@ select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; paddi
   </div>
 
   <!-- ORDERS -->
-  <div id="tab-ord" class="panel">
+  <div id="tab-ord" class="panel on">
     <div id="ord-load" class="loading">Loading…</div>
     <div id="ord-body" style="display:none">
       <div class="kpi-row c4">
@@ -270,14 +270,22 @@ select { font-size: 12px; border: 0.5px solid #d3d1c7; border-radius: 6px; paddi
         <div class="kpi"><div class="kpi-lbl">Vendor Bills YTD (€)</div><div class="kpi-val b" id="kinv">—</div><div class="kpi-sub">Supplier invoices received</div></div>
       </div>
       <div class="cw">
-        <div class="cw-title">Quarterly: POs Confirmed vs Customer Invoiced (EUR) 2026</div>
+        <div class="cw-title">Quarterly: POs Confirmed vs Vendor Bills (EUR) 2026</div>
         <div class="leg">
           <span><span class="dot" style="background:#595478"></span>Ordered</span>
           <span><span class="dot" style="background:#A3C7D2"></span>Vendor Bills</span>
         </div>
         <div class="cv cv-500"><canvas id="oc"></canvas></div>
       </div>
-      <div class="note">Ordered: purchase.order.line · state in (purchase, done) · user_id=484 · purchase_ok=true · excl. Engineering Tools, Shipping (Eng), Discount · FX: EUR×1 / USD×0.9 / GBP×1.1 · by date_approve quarter. Vendor Bills: account.move (in_invoice, posted) from same POs · by invoice_date quarter. Forecast: annual budget Q1–Q4.</div>
+      <div class="cw">
+        <div class="cw-title">Monthly: POs Confirmed vs Vendor Bills (EUR) 2026</div>
+        <div class="leg">
+          <span><span class="dot" style="background:#595478"></span>Ordered</span>
+          <span><span class="dot" style="background:#A3C7D2"></span>Vendor Bills</span>
+        </div>
+        <div class="cv cv-500"><canvas id="ocm"></canvas></div>
+      </div>
+      <div class="note">Ordered: purchase.order.line · state in (purchase, done) · user_id=484 · purchase_ok=true · excl. Engineering Tools, Shipping (Eng), Discount · FX: EUR×1 / USD×0.9 / GBP×1.1 · by date_approve. Vendor Bills: account.move (in_invoice, posted) from same POs · by invoice_date. Forecast: annual budget Q1–Q4.</div>
     </div>
   </div>
 
@@ -475,8 +483,8 @@ async function load(n) {
 }
 
 function initDashboard() {
-  loaded['cogs'] = true;
-  loadCOGS();
+  loaded['ord'] = true;
+  loadOrd();
   $('ts').textContent = 'Live · ' + new Date().toLocaleDateString('en-US');
 }
 
@@ -802,7 +810,7 @@ async function loadSup() {
          ['payment_state','in',['paid','in_payment']],
          ['invoice_date','>=','2026-01-01'],
          ['purchase_id','in',poIds]],
-        ['id','partner_id','amount_untaxed','currency_id','invoice_date'], 500
+        ['id','partner_id','purchase_id','amount_untaxed','currency_id','invoice_date'], 500
       );
       // 5. Pending (posted, not paid) vendor bills in 2026 linked to SC POs
       allBillsPending = await searchRead('account.move',
@@ -811,7 +819,7 @@ async function loadSup() {
          ['payment_state','in',['not_paid','partial']],
          ['invoice_date','>=','2026-01-01'],
          ['purchase_id','in',poIds]],
-        ['id','partner_id','amount_untaxed','currency_id','invoice_date'], 500
+        ['id','partner_id','purchase_id','amount_untaxed','currency_id','invoice_date'], 500
       );
     }
   } catch(e) { allPk = []; allPO = {}; allBills = []; allBillsPending = []; }
@@ -821,15 +829,20 @@ async function loadSup() {
     allQCFailed = qcRows.length;
   } catch(e) { allQCFailed = null; }
 
-  // Populate dropdown (from pickings + bills)
-  const seen = new Map();
-  allPk.forEach(p => {
-    if (p.partner_id?.[0] && !seen.has(p.partner_id[0]))
-      seen.set(p.partner_id[0], p.partner_id[1]);
+  // Build whitelist of valid partners from allPO (user_id=484 POs only)
+  const validSuppliers = new Map();
+  Object.values(allPO).forEach(po => {
+    const pid = po.partner_id?.[0], pnm = po.partner_id?.[1];
+    if (pid) validSuppliers.set(pid, (pnm||'').replace(/^\(.*?\)\s*/,''));
   });
+
+  // Populate dropdown — only partners from allPO
+  const seen = new Map(validSuppliers);
   allBills.forEach(b => {
-    if (b.partner_id?.[0] && !seen.has(b.partner_id[0]))
-      seen.set(b.partner_id[0], b.partner_id[1]);
+    const poId = Array.isArray(b.purchase_id) ? b.purchase_id[0] : b.purchase_id;
+    const po = allPO[poId];
+    const pid = po?.partner_id?.[0];
+    if (pid && !seen.has(pid)) seen.set(pid, (po.partner_id[1]||'').replace(/^\(.*?\)\s*/,''));
   });
   const sel = $('sup-sel');
   while (sel.options.length > 1) sel.remove(1);
@@ -846,7 +859,13 @@ async function loadSup() {
 
 function renderSup() {
   const sel = $('sup-sel').value;
-  const pk  = sel === 'all' ? allPk : allPk.filter(p => String(p.partner_id?.[0]) === sel);
+  // Helpers — always resolve supplier via PO, never from picking/bill partner_id directly
+  const poOf   = x => allPO[Array.isArray(x.purchase_id) ? x.purchase_id[0] : x.purchase_id];
+  const pkSupId = p => poOf(p)?.partner_id?.[0];
+  const pkSupNm = p => (poOf(p)?.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/,'');
+  const billSupId = b => poOf(b)?.partner_id?.[0];
+  const billSupNm = b => (poOf(b)?.partner_id?.[1] || b.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/,'');
+  const pk  = sel === 'all' ? allPk : allPk.filter(p => String(pkSupId(p)) === sel);
 
   // OTD: date_done ≤ scheduled_date + 2-day grace (physical reception lag)
   const graceDays = 2 * 86400000;
@@ -872,7 +891,7 @@ function renderSup() {
     const d = Math.max(1, (new Date(p.date_done) - new Date(po.date_approve)) / 86400000);
     if (d > 100) return;
     ltSum += d; ltCount++;
-    const nm = (p.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/,'');
+    const nm = pkSupNm(p);
     if (!ltBySupplier[nm]) ltBySupplier[nm] = [];
     ltBySupplier[nm].push(d);
   });
@@ -930,9 +949,9 @@ function renderSup() {
   // Spend by supplier chart (paid vendor bills)
   const FX_USD = 0.92, FX_GBP = 1.18; // approx EUR equiv
   const spendBySup = {};
-  const billsFiltered = sel === 'all' ? allBills : allBills.filter(b => String(b.partner_id?.[0]) === sel);
+  const billsFiltered = sel === 'all' ? allBills : allBills.filter(b => String(billSupId(b)) === sel);
   billsFiltered.forEach(b => {
-    const nm = (b.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/,'');
+    const nm = billSupNm(b);
     const ccy = Array.isArray(b.currency_id) ? b.currency_id[1] : 'EUR';
     const amt = b.amount_untaxed * (ccy === 'USD' ? FX_USD : ccy === 'GBP' ? FX_GBP : 1);
     spendBySup[nm] = (spendBySup[nm] || 0) + amt;
@@ -957,10 +976,10 @@ function renderSup() {
   });
 
   // Upcoming (pending) spend chart
-  const pendingFiltered = sel === 'all' ? allBillsPending : allBillsPending.filter(b => String(b.partner_id?.[0]) === sel);
+  const pendingFiltered = sel === 'all' ? allBillsPending : allBillsPending.filter(b => String(billSupId(b)) === sel);
   const pendBySup = {};
   pendingFiltered.forEach(b => {
-    const nm = (b.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/,'');
+    const nm = billSupNm(b);
     const ccy = Array.isArray(b.currency_id) ? b.currency_id[1] : 'EUR';
     const amt = b.amount_untaxed * (ccy === 'USD' ? FX_USD : ccy === 'GBP' ? FX_GBP : 1);
     pendBySup[nm] = (pendBySup[nm] || 0) + amt;
@@ -1066,8 +1085,10 @@ const FX_TO_EUR    = { EUR:1, USD:0.9, GBP:1.1 };
 const FORECAST_Q   = [205709.91, 69122.48, 128141.52, 120913.16]; // Q1–Q4 budget in EUR
 
 async function loadOrd() {
-  const poQ  = [0,0,0,0]; // Q1–Q4 confirmed POs in EUR
-  const invQ = [0,0,0,0]; // Q1–Q4 vendor bills received in EUR
+  const poQ  = [0,0,0,0];          // Q1–Q4 confirmed POs in EUR
+  const invQ = [0,0,0,0];          // Q1–Q4 vendor bills received in EUR
+  const poM  = new Array(12).fill(0);  // Jan–Dec confirmed POs in EUR
+  const invM = new Array(12).fill(0);  // Jan–Dec vendor bills in EUR
 
   try {
     // ── 1. PO lines ───────────────────────────────────────────────────────
@@ -1102,8 +1123,10 @@ async function loadOrd() {
       const cname = Array.isArray(po.currency_id) ? po.currency_id[1] : 'EUR';
       const fx    = FX_TO_EUR[cname] ?? 1;
       const amt   = (line.product_qty||0) * (line.price_unit||0) * fx;
-      const q     = Math.floor(new Date(po.date_approve).getMonth() / 3);
+      const month = new Date(po.date_approve).getMonth();
+      const q     = Math.floor(month / 3);
       poQ[q] += amt;
+      poM[month] += amt;
     });
 
     // ── 4. Vendor bills received for confirmed POs ────────────────────────
@@ -1121,8 +1144,10 @@ async function loadOrd() {
         if (!bill.invoice_date) return;
         const cname = Array.isArray(bill.currency_id) ? bill.currency_id[1] : 'EUR';
         const fx    = FX_TO_EUR[cname] ?? 1;
-        const q     = Math.floor(new Date(bill.invoice_date).getMonth() / 3);
-        invQ[q]    += (bill.amount_untaxed || 0) * fx;
+        const bMonth = new Date(bill.invoice_date).getMonth();
+        const q      = Math.floor(bMonth / 3);
+        invQ[q]     += (bill.amount_untaxed || 0) * fx;
+        invM[bMonth]+= (bill.amount_untaxed || 0) * fx;
       });
     }
 
@@ -1196,6 +1221,42 @@ async function loadOrd() {
     }
   });
 
+  // ── Monthly chart ─────────────────────────────────────────────────────
+  const mLabels = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const cumPOm  = poM.reduce((a,v)=>(a.push((a[a.length-1]||0)+v),a),[]);
+  const cumInvM = invM.reduce((a,v)=>(a.push((a[a.length-1]||0)+v),a),[]);
+  dc('ocm');
+  charts['ocm'] = new Chart($('ocm').getContext('2d'), {
+    type: 'bar',
+    data: { labels: mLabels, datasets: [
+      { label:'Ordered',      data:poM.map(v=>Math.round(v)),
+        backgroundColor:NE.purpleA(.7), borderRadius:4, order:5 },
+      { label:'Vendor Bills', data:invM.map(v=>Math.round(v)),
+        backgroundColor:NE.tealA(.7),   borderRadius:4, order:6 },
+      { type:'line', label:'Cum. Ordered',  data:cumPOm.map(Math.round),
+        borderColor:NE.purple, backgroundColor:NE.purpleA(.08),
+        borderWidth:2.5, pointRadius:4, pointBackgroundColor:'#fff',
+        pointBorderColor:NE.purple, pointBorderWidth:2, tension:0, fill:'origin', order:2 },
+      { type:'line', label:'Cum. Invoiced', data:cumInvM.map(Math.round),
+        borderColor:NE.teal, backgroundColor:NE.tealA(.10),
+        borderWidth:2.5, pointRadius:4, pointBackgroundColor:'#fff',
+        pointBorderColor:NE.teal, pointBorderWidth:2, tension:0, fill:'origin', order:3 },
+    ]},
+    options: { responsive:true, maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
+      plugins:{
+        legend:{display:true, position:'top',
+          labels:{color:'#4b4c4a', font:{size:13}, boxWidth:14, padding:18}},
+        tooltip:{backgroundColor:'rgba(44,44,42,.9)',
+          callbacks:{label:c=>` ${c.dataset.label}: ${eur(c.raw)}`}}},
+      scales:{
+        y:{ grid:{color:'rgba(0,0,0,.05)'},
+            ticks:{color:'#888780', font:{size:13}, callback:fmtK}},
+        x:{ grid:{display:false}, ticks:{color:'#4b4c4a', font:{size:13, weight:'500'}, autoSkip:false}}
+      }
+    }
+  });
+
   $('ord-load').style.display = 'none';
   $('ord-body').style.display = 'block';
 }
@@ -1231,7 +1292,8 @@ async function loadQC() {
     insp.forEach(i => {
       const pick = pickMap[i.picking_id?.[0]];
       if (!pick) return;
-      const sup = (pick.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/, '');
+      const poQ = allPO[Array.isArray(pick.purchase_id) ? pick.purchase_id[0] : pick.purchase_id];
+      const sup = (poQ?.partner_id?.[1] || pick.partner_id?.[1] || '?').replace(/^\(.*?\)\s*/, '');
       const prq = (pick.purchase_id?.[1] || '?').split(' ')[0];
       if (!supMap[sup]) supMap[sup] = { count: 0, qty: 0, rows: [] };
       supMap[sup].count++;
